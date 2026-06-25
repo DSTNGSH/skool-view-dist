@@ -10,7 +10,7 @@ own logged-in Skool session** — there's no central server and no shared creden
 3. Firefox asks to **Add skool-view** → **Add**. (The add-on is Mozilla-signed, so it installs permanently.)
 4. You'll see the **`cn`** button appear in the toolbar.
 
-> Firefox only for now. A Chrome build is a fast-follow.
+> On **Chrome, Edge, or Brave**? See [INSTALL-chrome.md](INSTALL-chrome.md).
 
 ## Use it
 

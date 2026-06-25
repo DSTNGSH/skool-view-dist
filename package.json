@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:chrome": "vite build --mode chrome",
     "check": "svelte-check --tsconfig ./jsconfig.json",
     "icons": "node scripts/make-icons.mjs",
     "package": "npm run build && web-ext build -s dist -a web-ext-artifacts --overwrite-dest",
+    "package:chrome": "npm run build:chrome && web-ext build -s dist -a web-ext-artifacts --overwrite-dest --filename \"skool-view-chrome-{version}.zip\"",
     "sign": "npm run build && web-ext sign -s dist -a web-ext-artifacts --channel=unlisted"
   },
   "dependencies": {
