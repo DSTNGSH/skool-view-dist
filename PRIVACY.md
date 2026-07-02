@@ -33,4 +33,4 @@ skool-view retains no data about you anywhere else.
 
 ## Contact
 
-roc.lee@gmail.com
+Persoonlijke fork voor eigen gebruik, niet publiek gedistribueerd — geen apart supportkanaal.

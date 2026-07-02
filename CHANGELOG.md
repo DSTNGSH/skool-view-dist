@@ -2,7 +2,14 @@
 
 All notable changes to skool-view.
 
-## 0.3.2 — 2026-07-02
+## Deze fork
+
+Wijzigingen bovenop onderstaande upstream-basis (tel-systeem, zoom, Markdown-download, zoekfunctie,
+composer-vormgeving, bugfixes) staan niet hier, maar in de workspace-logboeken:
+`Kennis/Logboeken/Scripts/Html/Geheugenlogboek_Weergeven_Skool_ChromeExtensie/`. Dat is de primaire
+bron — hier dupliceren zou uit sync raken.
+
+## 0.3.2 — 2026-07-02 (upstream)
 
 ### New
 - **Recent Activity sort** — now the default; orders posts by their latest comment or edit, matching

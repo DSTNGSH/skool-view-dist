@@ -12,15 +12,13 @@
   import Lightbox from './Lightbox.svelte';
   import { createFeedStore } from './feed/feedStore.svelte.js';
   import { getBuildId, getNotifications, getPost } from '../skool/read.js';
+  import { loadStatCache, resetStatOverrides, setStatOverride } from './feed/statOverrides.svelte.js';
+  import { setNotificationRead } from '../skool/write.js';
   import { parseCategories } from '../skool/categories.js';
   import { profileUrl } from '../skool/routes.js';
-  import { mapGroup } from '../skool/map.js';
-  import { markNotification } from '../skool/write.js';
-  import { createLevelFetcher } from '../skool/levels.js';
-  import { runCapped } from '../skool/scheduler.js';
-  import { SvelteMap } from 'svelte/reactivity';
-  import { getWafToken } from './waf.js';
+  import { getWafToken, clearWafToken } from './waf.js';
   import { loadTheme, saveTheme } from './theme.js';
+  import { ingestFeedLevels, loadMemberLevels } from './memberLevels.svelte.js';
 
   /**
    * @typedef {object} Props
@@ -56,6 +54,9 @@
   let bootState = $state('loading');
   let bootError = $state('');
   let groupName = $state('Community');
+  // Community logo URL, scraped from __NEXT_DATA__ at boot. Empty = the topbar falls back to the
+  // ▣ glyph.
+  let groupIcon = $state('');
   // The group's uuid (`currentGroup.id`) — NOT the slug. Needed for the api2 comments read
   // (`group-id` param). Scraped from the page's __NEXT_DATA__ at boot.
   let groupId = $state('');
@@ -83,6 +84,28 @@
   /** @type {ReturnType<typeof createFeedStore> | null} */
   let feedStore = $state(null);
 
+  // Resizable list pane — width persisted across sessions. The drag handle sits between the two
+  // panes in the `.layout` row; dragging updates `listWidth` live and only writes to storage on
+  // mouseup (avoids thrashing localStorage while dragging).
+  const LIST_WIDTH_KEY = 'sv-list-width';
+  let listWidth = $state(Number(localStorage.getItem(LIST_WIDTH_KEY)) || 400);
+  /** @param {MouseEvent} e */
+  function startResize(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = listWidth;
+    function onMove(/** @type {MouseEvent} */ ev) {
+      listWidth = Math.max(200, Math.min(700, startW + ev.clientX - startX));
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      localStorage.setItem(LIST_WIDTH_KEY, String(listWidth));
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
   // Manual refresh: reload the feed AND bump a nonce the open post's comments watch, so a refresh
   // pulls new posts and new comments.
   let refreshNonce = $state(0);
@@ -100,80 +123,8 @@
   let notifStatus = $state('idle');
   let notifCursor = $state('');
   let notifHasMore = $state(false);
+  const notifSyncInFlight = new Set();
   const unreadCount = $derived(notifItems.filter((n) => n.unread).length);
-
-  // ---- F6 group logo · F5 zoom · F4 resize · F2 level badges ----
-  // F6 — origin-validated community logo (mapGroup drops non-https / non-skool URLs); '' = ▣ mark.
-  let groupIcon = $state('');
-
-  // F5 — overlay zoom (70–150%), applied to the content pane; persisted in the page localStorage.
-  let zoom = $state(loadZoom());
-  /** @param {number} delta */
-  function setZoom(delta) {
-    zoom = Math.min(1.5, Math.max(0.7, Math.round((zoom + delta) * 10) / 10));
-    try {
-      localStorage.setItem('sv-zoom', String(Math.round(zoom * 100)));
-    } catch {
-      /* localStorage may be blocked — zoom just won't persist */
-    }
-  }
-  function loadZoom() {
-    try {
-      const v = Number(localStorage.getItem('sv-zoom'));
-      return v >= 70 && v <= 150 ? v / 100 : 1;
-    } catch {
-      return 1;
-    }
-  }
-
-  // F4 — resizable list width (200–700px), persisted.
-  let listWidth = $state(loadListWidth());
-  /** @param {PointerEvent} e */
-  function startResize(e) {
-    e.preventDefault();
-    const onMove = (/** @type {PointerEvent} */ ev) => {
-      listWidth = Math.min(700, Math.max(200, Math.round(ev.clientX)));
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      try {
-        localStorage.setItem('sv-list-width', String(listWidth));
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  }
-  function loadListWidth() {
-    try {
-      const v = Number(localStorage.getItem('sv-list-width'));
-      return v >= 200 && v <= 700 ? v : 400;
-    } catch {
-      return 400;
-    }
-  }
-
-  // F2 — on-demand member levels: fetch each author's level once, cache in a reactive map so the
-  // badge fills in without blocking render. `null` marks an in-flight/absent level (no badge).
-  /** @type {SvelteMap<string, number | null>} */
-  const levels = new SvelteMap();
-  /** @type {((userId: string) => Promise<number | null>) | null} */
-  let levelFetcher = null;
-  /** @param {string} userId */
-  function requestLevel(userId) {
-    if (!userId || levels.has(userId) || !levelFetcher) return;
-    levels.set(userId, null); // in-flight marker — prevents a refetch
-    levelFetcher(userId)
-      .then((lv) => levels.set(userId, lv))
-      .catch(() => {});
-  }
-  /** @param {string} userId @returns {number | undefined} */
-  function levelFor(userId) {
-    const lv = levels.get(userId);
-    return typeof lv === 'number' && lv > 0 ? lv : undefined;
-  }
 
   /** Load the first page (replaces the list). */
   async function loadNotifications() {
@@ -208,39 +159,39 @@
   }
 
   /**
-   * Toggle one notification's read state (F9). Optimistic; rolls back on a failed write. Skool's
-   * mark endpoint needs the notification's own timestamp (`ts` == created_at).
+   * Toggle one notification's read state — optimistic (flips local state + the unread badge
+   * immediately) then syncs to Skool in the background. Best-effort: a failed sync leaves the
+   * local flip as-is rather than rolling back, since read/unread has no user-visible "did it
+   * fail" affordance worth adding for a low-stakes toggle.
    * @param {import('../skool/map.js').NotificationView} n
    */
-  async function toggleNotifRead(n) {
-    const markRead = n.unread; // unread → mark read; read → mark unread
-    notifItems = notifItems.map((it) => (it.id === n.id ? { ...it, unread: !markRead } : it));
-    try {
-      const wafToken = await getWafToken();
-      await markNotification({ id: n.id, createdAt: n.ts, read: markRead, wafToken });
-    } catch {
-      notifItems = notifItems.map((it) => (it.id === n.id ? { ...it, unread: n.unread } : it));
-    }
+  function toggleNotificationRead(n) {
+    const nowUnread = !n.unread;
+    notifItems = notifItems.map((item) => (item.id === n.id ? { ...item, unread: nowUnread } : item));
+    void syncNotificationRead(n.id, !nowUnread);
   }
 
-  /** Mark every notification read (F9), chunked through the shared scheduler. */
-  async function markAllNotifsRead() {
-    const unread = notifItems.filter((n) => n.unread);
-    if (!unread.length) return;
-    const snapshot = notifItems;
-    notifItems = notifItems.map((it) => ({ ...it, unread: false })); // optimistic
+  /** Mark every loaded notification read — optimistic, then syncs each previously-unread one. */
+  function markAllNotificationsRead() {
+    const wasUnread = notifItems.filter((n) => n.unread).map((n) => n.id);
+    notifItems = notifItems.map((item) => ({ ...item, unread: false }));
+    for (const id of wasUnread) void syncNotificationRead(id, true);
+  }
+
+  /** @param {string} id @param {boolean} read */
+  async function syncNotificationRead(id, read) {
+    if (notifSyncInFlight.has(id)) return;
+    notifSyncInFlight.add(id);
     try {
       const wafToken = await getWafToken();
-      await runCapped(
-        unread.map((n) => () => markNotification({ id: n.id, createdAt: n.ts, read: true, wafToken })),
-        {
-          concurrency: 3,
-          isRateLimited: (e) =>
-            /** @type {any} */ (e)?.status === 403 || /** @type {any} */ (e)?.isWaf === true,
-        },
-      );
-    } catch {
-      notifItems = snapshot;
+      await setNotificationRead({ id, read, wafToken });
+    } catch (err) {
+      // A 403 (stale WAF token) — drop the cached token so a retry re-reads it, same as the
+      // comment-write flows (PostActions, CommentsSection, Comment.svelte).
+      if (/** @type {any} */ (err)?.status === 403) clearWafToken();
+      console.warn('[skool-view] notification read-sync failed:', err);
+    } finally {
+      notifSyncInFlight.delete(id);
     }
   }
 
@@ -297,28 +248,48 @@
       const groupIdMatch = /"currentGroup"\s*:\s*\{\s*"id"\s*:\s*"([^"]+)"/.exec(html);
       groupId = groupIdMatch ? groupIdMatch[1] : '';
 
-      // F6 — community logo from the group metadata, origin-validated by mapGroup (drops any
-      // non-https / non-skool host); '' falls back to the ▣ brand mark.
-      const logoMatch = /"logoUrl"\s*:\s*"([^"]+)"/.exec(html);
-      groupIcon = mapGroup({
-        metadata: { logoUrl: logoMatch ? decodeJsonString(logoMatch[1]) : '' },
-      }).iconUrl;
-
-      // F2 — build the cached, capped level fetcher now that the group id is known.
-      levelFetcher = createLevelFetcher({ groupId, getWafToken });
+      groupIcon = parseGroupIcon(html);
 
       // Signed-in user (for the optimistic author of comments/replies you write). Best-effort:
       // the page may not carry it (logged out / shape changed), in which case the write composers
       // fall back to a "You" label — so this NEVER blocks boot.
       currentUser = parseSelf(html);
+      ingestFeedLevels(html);
+      const nextData = /** @type {any} */ (window).__NEXT_DATA__;
+      if (nextData) ingestFeedLevels(nextData);
 
+      resetStatOverrides();
+      await loadStatCache();
       feedStore = createFeedStore({ buildId, slug });
       bootState = 'ready';
+      void loadMemberLevels({ slug, groupId, buildId }).catch(() => {
+        // Best-effort only; direct payload lookup still works if scraping fails.
+      });
       void loadNotifications();
     } catch (err) {
       bootError = err instanceof Error ? err.message : 'Something went wrong loading this community.';
       bootState = 'error';
     }
+  }
+
+  /**
+   * Best-effort scrape of the community logo from `currentGroup.metadata` in __NEXT_DATA__ (the
+   * same block `groupIdMatch` anchors on). Tries the square logo, then the large logo, then the
+   * favicon — Skool doesn't always populate all three. '' (no scrape hit) falls back to the ▣
+   * glyph in the topbar.
+   * @param {string} html
+   * @returns {string}
+   */
+  function parseGroupIcon(html) {
+    const start = /"currentGroup"\s*:\s*\{/.exec(html);
+    if (!start) return '';
+    const slice = html.slice(start.index, start.index + 4000);
+    const url =
+      /"logoUrl"\s*:\s*"([^"]*)"/.exec(slice)?.[1] ??
+      /"logoBigUrl"\s*:\s*"([^"]*)"/.exec(slice)?.[1] ??
+      /"faviconUrl"\s*:\s*"([^"]*)"/.exec(slice)?.[1] ??
+      '';
+    return url ? decodeJsonString(url) : '';
   }
 
   /**
@@ -380,6 +351,16 @@
     try {
       const { post } = await getPost({ buildId, slug, postSlug });
       if (post && selectedId === id) openedPost = post; // ignore if the user moved on
+      // The single-post route returns the current counts — correct the list row too, so opening a
+      // post never shows a different count than what was visible before you clicked it.
+      if (post) {
+        const upvotes = typeof post.upvotes === 'number' ? post.upvotes : null;
+        const comments = typeof post.comments === 'number' ? post.comments : null;
+        if (upvotes != null || comments != null) setStatOverride(id, upvotes, comments);
+        // Same enrichment the background prefetch does (statOverrides.svelte.js) — opening a post
+        // directly shouldn't have to wait for its turn in that queue to pick up its author's level.
+        ingestFeedLevels(post);
+      }
     } catch {
       /* keep the feed preview */
     }
@@ -393,6 +374,12 @@
    * @param {import('../skool/map.js').NotificationView} n
    */
   async function openNotificationTarget(n) {
+    // Opening a notification's target marks it read — locally (badge count) and on Skool itself.
+    // Mirrors the old extension's behavior, dropped during the terugmigratie rebuild.
+    if (n.unread) {
+      notifItems = notifItems.map((item) => (item.id === n.id ? { ...item, unread: false } : item));
+      void syncNotificationRead(n.id, true);
+    }
     highlightCommentId = n.commentId || '';
     selectedId = n.rootPostId;
     openedPost = null; // the feed preview (if any) shows until the full post loads
@@ -450,8 +437,8 @@
     onOpenNotifications={loadNotifications}
     onLoadMoreNotifications={loadMoreNotifications}
     onOpenNotification={openNotificationTarget}
-    onToggleNotifRead={toggleNotifRead}
-    onMarkAllNotifsRead={markAllNotifsRead}
+    onToggleNotification={toggleNotificationRead}
+    onMarkAllReadNotifications={markAllNotificationsRead}
   />
 
   {#if bootState === 'off-community'}
@@ -471,35 +458,14 @@
       </div>
     </main>
   {:else if feedStore}
-    <div class="layout" style="zoom: {zoom}">
-      <FeedList
-        store={feedStore}
-        {categories}
-        {selectedId}
-        onSelect={selectPost}
-        width={listWidth}
-        {levelFor}
-        {requestLevel}
-      />
-      <button
-        class="resize-handle"
-        type="button"
-        aria-label="Resize the post list (drag, or use the arrow keys)"
-        onpointerdown={startResize}
-        onkeydown={(e) => {
-          if (e.key === 'ArrowLeft') {
-            listWidth = Math.max(200, listWidth - 20);
-            e.preventDefault();
-          } else if (e.key === 'ArrowRight') {
-            listWidth = Math.min(700, listWidth + 20);
-            e.preventDefault();
-          }
-        }}
-      ></button>
+    <div class="layout">
+      <FeedList store={feedStore} {categories} {selectedId} onSelect={selectPost} {listWidth} {buildId} {slug} />
+      <div class="resize-handle" title="Drag to resize" onmousedown={startResize} role="presentation"></div>
       <DetailPane
         post={selectedPost}
         categoryName={selectedCategoryName}
         {groupId}
+        {slug}
         {currentUser}
         {mentionHref}
         {registerMention}
@@ -508,14 +474,7 @@
         pinned={feedStore?.isPinned(selectedPost) ?? false}
         nativePinned={selectedPost?.pinned ?? false}
         onTogglePin={(id) => feedStore?.togglePin(id, selectedPost?.pinned ?? false)}
-        {levelFor}
-        {requestLevel}
       />
-    </div>
-    <div class="zoom" role="group" aria-label="Zoom">
-      <button type="button" aria-label="Zoom out" onclick={() => setZoom(-0.1)}>−</button>
-      <span class="zpct">{Math.round(zoom * 100)}%</span>
-      <button type="button" aria-label="Zoom in" onclick={() => setZoom(0.1)}>+</button>
     </div>
   {/if}
 

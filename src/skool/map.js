@@ -22,6 +22,9 @@ import { BASE } from './routes.js';
  * @property {string} firstName
  * @property {string} lastName
  * @property {string} avatar
+ * @property {number} [level] Member level/rank badge. Absent/0 when not found on this payload
+ *   shape, or for an optimistically-authored comment/reply (the current user's level isn't
+ *   scraped from the page).
  */
 
 /**
@@ -54,7 +57,6 @@ import { BASE } from './routes.js';
  * @property {number} comments
  * @property {boolean} pinned
  * @property {string} created
- * @property {string} updated Last-activity timestamp (edit or new comment) — Skool's `updatedAt`.
  * @property {string | null} labelId
  * @property {Author} author
  * @property {Attachment[]} [attachments]
@@ -163,7 +165,88 @@ function mapAuthor(spec, raw) {
   const handle = String(pick(root, spec.handle) ?? '');
   // When the only hit was a full "name", lastName is '' and firstName holds the whole thing;
   // that's fine for display (name === firstName), and the view-model still resolves.
-  return { id, name, handle, firstName, lastName, avatar };
+  const level = findMemberLevel(root, raw);
+  return { id, name, handle, firstName, lastName, avatar, level };
+}
+
+/**
+ * Skool doesn't expose member level at one consistent path — it's been seen under a handful of
+ * different keys depending on the payload shape (post vs. member vs. comment author), and
+ * sometimes only inside a packed `sp_data`/`spData` JSON string (`{ "lv": N, ... }`). Try the
+ * known direct paths first, then that packed-JSON field, then fall back to a shallow recursive
+ * scan for anything level-shaped. Returns 0 (no badge) rather than guessing wrong.
+ * @param {unknown} root The author's own object (mapAuthor's `root`).
+ * @param {unknown} raw The full surrounding post/comment/member object (level sometimes sits
+ *   beside the author block rather than inside it).
+ * @returns {number}
+ */
+function findMemberLevel(root, raw) {
+  const levelPaths = [
+    'metadata.level', 'metadata.currentLevel', 'metadata.skoolLevel', 'metadata.memberLevel',
+    'metadata.communityLevel', 'metadata.rank', 'metadata.tier',
+    'level', 'currentLevel', 'memberLevel', 'communityLevel', 'skoolLevel', 'rank', 'tier',
+    'member.level', 'member.currentLevel', 'membership.level', 'groupMembership.level',
+    'communityMembership.level', 'memberProfile.level', 'profile.level',
+  ];
+  let raw_ = levelPaths.reduce(
+    (found, path) => found ?? pick(root, path) ?? pick(raw, path),
+    /** @type {unknown} */ (undefined),
+  );
+
+  if (raw_ == null || raw_ === '') {
+    const spStr = String(
+      pick(root, 'metadata.sp_data') ?? pick(root, 'metadata.spData') ??
+      pick(raw, 'metadata.sp_data') ?? pick(raw, 'metadata.spData') ?? '',
+    );
+    if (spStr) {
+      try {
+        const spd = JSON.parse(spStr);
+        if (spd?.lv > 0) raw_ = spd.lv;
+      } catch {
+        // Not JSON, or not the shape we expect — fall through to the deep scan.
+      }
+    }
+  }
+
+  if (raw_ == null || raw_ === '') {
+    raw_ = deepScanForLevel(root, 4) ?? deepScanForLevel(raw, 4);
+  }
+
+  return raw_ != null && raw_ !== '' ? Number(raw_) || 0 : 0;
+}
+
+/**
+ * Shallow recursive scan (depth-limited) for a level-shaped key ("level"/"rank"/"tier", or a
+ * `sp_data`/`spData` packed-JSON string with an `lv` field) anywhere in `obj`. Bounds the level to
+ * a plausible range (1-199) so it doesn't false-positive on an unrelated numeric field.
+ * @param {unknown} obj
+ * @param {number} depth
+ * @returns {number | undefined}
+ */
+function deepScanForLevel(obj, depth) {
+  if (!obj || typeof obj !== 'object' || depth <= 0) return undefined;
+  for (const [key, value] of Object.entries(obj)) {
+    const keyLower = key.toLowerCase();
+    if ((key === 'sp_data' || key === 'spData') && typeof value === 'string') {
+      try {
+        const spd = JSON.parse(value);
+        if (spd?.lv > 0) return spd.lv;
+      } catch {
+        // Not JSON — ignore.
+      }
+    }
+    if ((keyLower.includes('level') || keyLower === 'rank' || keyLower === 'tier') && value != null && value !== '') {
+      const n = Number(value);
+      if (n > 0 && n < 200) return value;
+    }
+  }
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const found = deepScanForLevel(value, depth - 1);
+      if (found != null) return found;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -233,7 +316,6 @@ export function mapPost(raw) {
     comments: asInt(getPath(raw, spec.comments)),
     pinned: Boolean(getPath(raw, spec.pinned)),
     created: String(getPath(raw, spec.created) ?? ''),
-    updated: String(getPath(raw, spec.updated) ?? ''),
     labelId: /** @type {string | null} */ (getPath(raw, spec.labelId) ?? null),
     author: mapAuthor(spec.author, raw),
     // Next.js routes camelCase the field (`attachmentsData`); api2 uses snake_case — try both.
@@ -241,88 +323,6 @@ export function mapPost(raw) {
       getPath(raw, 'metadata.attachmentsData') ?? getPath(raw, 'metadata.attachments_data'),
     ),
   };
-}
-
-/**
- * Extract a member's group level from a `GET /users/{id}/preview?g=` response. Skool packs the
- * per-group stats into `user.metadata.sp_data` — a STRINGIFIED JSON like
- * `{"pts":12705,"lv":8,"pcl":8015,"pnl":33015,"role":2}`, where `lv` is the level. Keyed by the
- * stable `user.id`. Returns `{ userId, level }` with `level: null` when sp_data is absent/malformed,
- * or `null` without a user id. (Confirmed live 2026-07-01; see the reverse-engineering notes.)
- * @param {unknown} raw The parsed preview response.
- * @returns {{ userId: string, level: number | null } | null}
- */
-export function mapMemberLevel(raw) {
-  const user = /** @type {any} */ (raw)?.user;
-  const userId = user?.id;
-  if (typeof userId !== 'string' || !userId) return null;
-  let level = /** @type {number | null} */ (null);
-  const sp = user?.metadata?.sp_data;
-  if (typeof sp === 'string') {
-    try {
-      const parsed = JSON.parse(sp);
-      if (typeof parsed?.lv === 'number') level = parsed.lv;
-    } catch {
-      /* malformed sp_data → no level */
-    }
-  }
-  return { userId, level };
-}
-
-/**
- * @typedef {object} GroupView
- * @property {string} name The community's display name.
- * @property {string} iconUrl A validated https Skool-hosted logo URL, or '' to fall back to ▣.
- */
-
-/**
- * Map a raw group (`pageProps.currentGroup`) to a topbar view-model. The logo is read from
- * `metadata.logoUrl` (falling back to `logoBigUrl`/`faviconUrl`) and **origin-validated** (F6-S1):
- * only an https URL on a skool.com host is kept, so a crafted community can't turn the topbar icon
- * into an off-origin tracking pixel — an unknown/invalid host degrades to '' (the ▣ mark).
- * @param {unknown} raw The `currentGroup` object from a feed page.
- * @returns {GroupView}
- */
-export function mapGroup(raw) {
-  const group = /** @type {any} */ (raw) ?? {};
-  const meta = group.metadata ?? {};
-  const candidate = String(meta.logoUrl ?? meta.logoBigUrl ?? meta.faviconUrl ?? '');
-  return {
-    name: String(group.name ?? group.displayName ?? meta.displayName ?? ''),
-    iconUrl: safeAssetUrl(candidate),
-  };
-}
-
-/**
- * Keep a URL only if it is https on a skool.com host (incl. Skool's `assets.skool.com` CDN); else ''.
- * @param {string} url
- * @returns {string}
- */
-function safeAssetUrl(url) {
-  if (!url) return '';
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' && /(^|\.)skool\.com$/i.test(u.hostname) ? u.href : '';
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Resolve a Skool relative link (`link_as`) against the site origin, returning an absolute URL ONLY
- * if it stays on a skool.com host — else ''. Prevents a crafted notification link
- * (`"@evil.com/"` → `https://www.skool.com@evil.com/`) becoming an off-origin open-redirect (F9-S4).
- * @param {string} linkAs
- * @returns {string}
- */
-function safeSkoolHref(linkAs) {
-  if (!linkAs) return '';
-  try {
-    const u = new URL(linkAs, BASE);
-    return /(^|\.)skool\.com$/i.test(u.hostname) ? u.href : '';
-  } catch {
-    return '';
-  }
 }
 
 /**
@@ -422,7 +422,7 @@ export function mapNotification(raw) {
     actorAvatar: String(pick(data, spec.data.actorAvatar) ?? ''),
     text: String(pick(data, spec.data.text) ?? ''),
     preview: String(pick(data, spec.data.preview) ?? ''),
-    href: safeSkoolHref(linkAs),
+    href: linkAs ? `${BASE}${linkAs}` : '',
     rootPostId,
     // For a comment/reply/mention (and like-comment) post_id is the COMMENT and differs from the
     // root; for a new-post / like-post it equals the root, so there's no specific comment to jump to.

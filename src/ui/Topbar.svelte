@@ -1,8 +1,9 @@
 <script>
   // Overlay top bar: "← Back to Skool" exit, brand + community name, the single "Feed" tab, then a
-  // right cluster — manual REFRESH, the notifications bell (+ unread badge + dropdown panel), a
-  // disabled chat placeholder (v2), and the theme selector. Clicking a notification deep-links to
-  // native Skool (see NotificationPanel). No yellow new-post banner (spec §4/§5).
+  // right cluster — manual REFRESH, a disabled chat placeholder (v2), the notifications bell
+  // (+ unread badge + dropdown panel), and the theme selector — chat-then-bell order matches
+  // native Skool's own topbar. Clicking a notification deep-links to native Skool (see
+  // NotificationPanel). No yellow new-post banner (spec §4/§5).
   import ThemeSelect from './ThemeSelect.svelte';
   import NotificationPanel from './NotificationPanel.svelte';
 
@@ -11,7 +12,7 @@
   /**
    * @typedef {object} Props
    * @property {string} groupName Community display name for the brand area.
-   * @property {string} [groupIcon] Community logo URL (F6); shown instead of the ▣ mark when set.
+   * @property {string} [groupIcon] Community logo URL — replaces the ▣ glyph when present.
    * @property {import('./theme.js').ThemeId} theme
    * @property {(theme: import('./theme.js').ThemeId) => void} onThemeChange
    * @property {() => void} onExit Toggles the overlay off (content-script toggle).
@@ -20,11 +21,12 @@
    * @property {'idle' | 'loading' | 'ready' | 'error'} [notifStatus]
    * @property {boolean} [notifHasMore]
    * @property {number} [unreadCount]
-   * @property {() => void} [onOpenNotifications] Called when the bell opens (trigger a fetch).
+   * @property {() => void} [onOpenNotifications] Called on the bell's first open (empty list only —
+   *   later opens reuse what's already loaded).
    * @property {() => void} [onLoadMoreNotifications] Append the next page of notifications.
    * @property {(n: NotificationView) => void} [onOpenNotification] Open a notification's target post.
-   * @property {(n: NotificationView) => void} [onToggleNotifRead] Toggle one notification's read state.
-   * @property {() => void} [onMarkAllNotifsRead] Mark every notification read.
+   * @property {(n: NotificationView) => void} [onToggleNotification] Toggle one notification's read state.
+   * @property {() => void} [onMarkAllReadNotifications]
    */
   /** @type {Props} */
   let {
@@ -41,28 +43,31 @@
     onOpenNotifications,
     onLoadMoreNotifications,
     onOpenNotification,
-    onToggleNotifRead,
-    onMarkAllNotifsRead,
+    onToggleNotification,
+    onMarkAllReadNotifications,
   } = $props();
 
   let notifOpen = $state(false);
   /** @type {HTMLElement | undefined} */
   let notifWrapEl = $state();
+
   function toggleNotif() {
     notifOpen = !notifOpen;
-    if (notifOpen) onOpenNotifications?.();
+    // Fetch only on the first open (empty list) — reopening keeps whatever's already loaded, the
+    // same way the refresh button and a manual "Load more" are the only other triggers.
+    if (notifOpen && notifItems.length === 0) onOpenNotifications?.();
   }
 
-  // Close the panel on a click anywhere outside the bell/panel. composedPath() pierces the shadow
-  // DOM so this works inside the overlay's shadow root; the listener is only bound while open.
+  // Close the panel on a click anywhere outside it — not just the explicit × button.
   $effect(() => {
     if (!notifOpen) return;
-    /** @param {Event} e */
-    const onDocClick = (e) => {
-      if (notifWrapEl && !e.composedPath().includes(notifWrapEl)) notifOpen = false;
+    /** @param {MouseEvent} e */
+    const onOutside = (e) => {
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+      if (notifWrapEl && !path.includes(notifWrapEl)) notifOpen = false;
     };
-    window.addEventListener('click', onDocClick, true);
-    return () => window.removeEventListener('click', onDocClick, true);
+    document.addEventListener('click', onOutside, true);
+    return () => document.removeEventListener('click', onOutside, true);
   });
 </script>
 
@@ -80,7 +85,13 @@
       </svg>
     </button>
     <div class="brand">
-      {#if groupIcon}<img class="group-icon" src={groupIcon} alt="" />{:else}<span class="brand-mark">▣</span>{/if}
+      <span class="brand-mark">
+        {#if groupIcon}
+          <img class="group-icon" src={groupIcon} alt={groupName} />
+        {:else}
+          ▣
+        {/if}
+      </span>
       <span>{groupName}</span>
     </div>
   </div>
@@ -105,6 +116,19 @@
       </svg>
     </button>
 
+    <button
+      class="iconbtn"
+      type="button"
+      disabled
+      aria-label="Chat — coming in a later version"
+      title="Chat — coming soon"
+    >
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="12" rx="4" />
+        <path d="M8.5 17l-1.5 3 4-2.4" />
+      </svg>
+    </button>
+
     <div class="notif-wrap" bind:this={notifWrapEl}>
       <button
         class="iconbtn"
@@ -114,11 +138,9 @@
         title="Notifications"
         onclick={toggleNotif}
       >
-        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5a6 6 0 0 0-5-5.91V4a1 1 0 0 0-2 0v1.09A6 6 0 0 0 6 11v5l-2 2v1h16v-1z"
-          />
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {#if unreadCount > 0}
           <span class="notif-badge">{unreadCount}</span>
@@ -134,27 +156,12 @@
             notifOpen = false;
             onOpenNotification?.(n);
           }}
-          onToggleRead={onToggleNotifRead}
-          onMarkAll={onMarkAllNotifsRead}
+          onToggle={onToggleNotification}
+          onMarkAllRead={onMarkAllReadNotifications}
           onClose={() => (notifOpen = false)}
         />
       {/if}
     </div>
-
-    <button
-      class="iconbtn"
-      type="button"
-      disabled
-      aria-label="Chat — coming in a later version"
-      title="Chat — coming soon"
-    >
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"
-        />
-      </svg>
-    </button>
 
     <ThemeSelect value={theme} onChange={onThemeChange} />
   </div>

@@ -81,6 +81,21 @@ browser.runtime.onMessage.addListener(
     // `cookies` permission + skool.com host access, so it can read it via browser.cookies.get.
     // Needed for the api2 comments read (and step-5 writes), which send it as the
     // `x-aws-waf-token` header.
+    // The in-overlay "Download" button asked to save a post as Markdown. Runs from the
+    // background (not the content script) because `downloads.download` needs the `downloads`
+    // permission, which is only granted here. `conflictAction: 'uniquify'` avoids clobbering an
+    // earlier download of the same post; the fixed "Skool/" subfolder lets a local directory
+    // junction route saves straight into the archive inbox without a save-as prompt.
+    if (msg?.type === 'skool-view:download') {
+      const { filename, markdown } = /** @type {{ filename: string, markdown: string }} */ (message);
+      const dataUrl = 'data:text/markdown;charset=utf-8,' + encodeURIComponent(markdown);
+      const subfolder = 'Skool';
+      return browser.downloads
+        .download({ url: dataUrl, filename: subfolder + '/' + filename, conflictAction: 'uniquify' })
+        .then(() => ({ ok: true }))
+        .catch((err) => ({ ok: false, error: String(err) }));
+    }
+
     if (msg?.type === 'skool-view:get-waf-token') {
       return browser.cookies
         .get({ url: 'https://www.skool.com', name: 'aws-waf-token' })
@@ -96,3 +111,16 @@ browser.runtime.onMessage.addListener(
 browser.tabs.onRemoved.addListener((tabId) => {
   void browser.storage.session.remove(stateKey(tabId));
 });
+
+// A real navigation committed (reload, typed URL, external link) — as opposed to Skool's own SPA
+// route changes, which use history.pushState and fire onHistoryStateUpdated instead, never this
+// event. Reset the tab to off so every real page load starts from Skool's own page (matches the
+// manifest's "off by default"), while toggling the overlay on still survives Skool's internal
+// in-app navigation.
+browser.webNavigation.onCommitted.addListener(
+  (details) => {
+    if (details.frameId !== 0) return;
+    void writeTabState(details.tabId, false);
+  },
+  { url: [{ hostSuffix: 'skool.com' }] },
+);

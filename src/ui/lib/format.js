@@ -23,6 +23,26 @@ export function shortDate(iso) {
 }
 
 /**
+ * Format an ISO timestamp as a compact relative age for list rows ("now", "12m", "3h", "5d"),
+ * falling back to `shortDate` past a week out (and for anything unparseable).
+ * @param {string | null | undefined} iso
+ * @returns {string}
+ */
+export function relativeTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return shortDate(iso);
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (diffMin < 1) return 'now';
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD < 7) return `${diffD}d`;
+  return shortDate(iso);
+}
+
+/**
  * Format a comment timestamp as "Mon D, h:mm AM/PM". Comments carry a full ISO timestamp; the
  * detail pane shows the time of day (unlike feed rows, which show only the date). Returns '' for
  * empty/unparseable input so a comment never renders "Invalid Date".
@@ -38,31 +58,6 @@ export function commentTime(iso) {
   hours = hours % 12 || 12;
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${hours}:${minutes} ${meridiem}`;
-}
-
-/**
- * Format an ISO timestamp as a compact relative age ("2h", "3d") for recent posts, falling back to
- * an absolute short date ("Jun 25") once the post is older than `absoluteAfterDays`. Recent activity
- * reads as "how long ago"; older posts read as a real date. Unparseable/empty/future input falls
- * back to {@link shortDate} (which returns '' for empty). `now` is injected for deterministic tests.
- * @param {string | null | undefined} iso
- * @param {number} [now] Epoch ms "now" (default Date.now()).
- * @param {{ absoluteAfterDays?: number }} [opts]
- * @returns {string}
- */
-export function relativeTime(iso, now = Date.now(), { absoluteAfterDays = 5 } = {}) {
-  if (!iso) return '';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return shortDate(iso);
-  const diffMs = now - then;
-  const DAY = 86_400_000;
-  if (diffMs < 0 || diffMs >= absoluteAfterDays * DAY) return shortDate(iso);
-  const mins = Math.floor(diffMs / 60_000);
-  if (mins < 1) return 'now';
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
 }
 
 /**

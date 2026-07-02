@@ -183,24 +183,12 @@ export function notificationsUrl({ cursor, limit = 30, type = 'all' } = {}) {
 }
 
 /**
- * api2 member-preview route — a single member's profile card scoped to a group (name, avatar, and
- * the packed `sp_data` that carries their level). WAF-gated. Confirmed live (2026-07-01, HAR):
- * `GET /users/{userId}/preview?g={groupId}`. Powers F2 on-demand level badges.
- * @param {string} userId The member's user uuid.
- * @param {string} groupId The community group's uuid.
+ * Mark a single notification read/unread. WAF-gated. Confirmed live: `POST
+ * /messages/{id}/read` and `POST /messages/{id}/unread` (empty `{}` body).
+ * @param {string} id Notification id.
+ * @param {boolean} read True for the read endpoint, false for unread.
  * @returns {string} Absolute URL.
  */
-export function memberPreviewUrl(userId, groupId) {
-  return `${API2_BASE}/users/${encodeURIComponent(userId)}/preview?g=${encodeURIComponent(groupId)}`;
-}
-
-/**
- * api2 notification mark read/unread route. WAF-gated. Confirmed live (2026-07-01, HAR):
- * `POST /messages/{messageId}/read` (or `/unread`) with body `{ created_at }` (see write.js).
- * @param {string} messageId The notification's message uuid.
- * @param {boolean} read True → mark read; false → mark unread.
- * @returns {string} Absolute URL.
- */
-export function markNotificationUrl(messageId, read) {
-  return `${API2_BASE}/messages/${encodeURIComponent(messageId)}/${read ? 'read' : 'unread'}`;
+export function notificationReadUrl(id, read) {
+  return `${API2_BASE}/messages/${id}/${read ? 'read' : 'unread'}`;
 }

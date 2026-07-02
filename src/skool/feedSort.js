@@ -12,7 +12,6 @@
  * @type {ReadonlyArray<{ value: SortMode, label: string }>}
  */
 export const SORT_MODES = /** @type {const} */ ([
-  { value: 'activity', label: 'Recent Activity' },
   { value: 'newest', label: 'Newest' },
   { value: 'oldest', label: 'Oldest' },
   { value: 'likes', label: 'Most Liked' },
@@ -20,7 +19,7 @@ export const SORT_MODES = /** @type {const} */ ([
   { value: 'gems', label: 'Hidden Gems' },
 ]);
 
-/** @typedef {'activity' | 'newest' | 'oldest' | 'likes' | 'comments' | 'gems'} SortMode */
+/** @typedef {'newest' | 'oldest' | 'likes' | 'comments' | 'gems'} SortMode */
 
 // "Hidden Gems" = posts that earned real engagement but have aged out of the active feed.
 const GEM_MIN_AGE_DAYS = 45;
@@ -35,18 +34,6 @@ const DAY_MS = 86_400_000;
 function createdMs(post) {
   const t = Date.parse(post.created);
   return Number.isNaN(t) ? 0 : t;
-}
-
-/**
- * Parse a post's `updated` (last edit/comment activity — Skool's default order) to epoch ms. Falls
- * back to `created` when absent/unparseable (older cached posts), so "Recent Activity" degrades to
- * created order rather than sorting them to the bottom.
- * @param {PostView} post
- * @returns {number}
- */
-function updatedMs(post) {
-  const t = Date.parse(post.updated);
-  return Number.isNaN(t) ? createdMs(post) : t;
 }
 
 /**
@@ -86,9 +73,6 @@ export function filterByCategory(posts, labelId) {
 export function sortPosts(posts, mode, now = Date.now()) {
   const arr = posts.slice();
   switch (mode) {
-    case 'activity':
-      // Skool's default order: most-recently-active (edited or newly-commented) first.
-      return arr.sort((a, b) => updatedMs(b) - updatedMs(a));
     case 'oldest':
       return arr.sort((a, b) => createdMs(a) - createdMs(b));
     case 'likes':

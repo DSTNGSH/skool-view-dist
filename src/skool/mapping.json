@@ -9,7 +9,6 @@
     "comments": "metadata.comments",
     "pinned": "metadata.pinned",
     "created": "createdAt",
-    "updated": "updatedAt",
     "labelId": "labelId",
     "author": {
       "_root": "user",

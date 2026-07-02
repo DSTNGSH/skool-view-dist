@@ -20,12 +20,11 @@
   --good: #3fb950;
   --radius: 12px;
   --topbar-h: 56px;
-  --font: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --listbg: #0c0f14;
   --rowdiv: #1a1f29;
   --bodytext: #c9d1d9;
   --btn-fg: #07101f;
-  --level: #1d6ce0;
 }
 
 /* ---- Discord theme ---- */
@@ -45,7 +44,7 @@
   --good: #23a55a;
   --btn-fg: #ffffff;
   --radius: 8px;
-  --font: "gg sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 /* ---- MiniMax theme (light) ---- */
@@ -67,7 +66,7 @@
   --good: #16a34a;
   --btn-fg: #ffffff;
   --radius: 13px;
-  --font: "DM Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 /* ---- root container (replaces the prototype's body) ---- */
@@ -167,6 +166,14 @@
 .sv-root .brand-mark {
   color: var(--brand-pink, currentColor);
 }
+.sv-root .group-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: inline-block;
+  vertical-align: middle;
+}
 .sv-root .tabs {
   display: flex;
   gap: 4px;
@@ -229,19 +236,20 @@
 }
 .sv-root .notif-badge {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
   box-sizing: border-box;
   border-radius: 999px;
-  background: var(--accent-2);
+  background: #ff3b30;
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 15px;
+  line-height: 18px;
   text-align: center;
+  box-shadow: 0 0 0 2px var(--listbg);
 }
 .sv-root .notif-panel {
   position: absolute;
@@ -282,12 +290,44 @@
   border-bottom: 1px solid var(--rowdiv);
   color: var(--text);
   text-decoration: none;
+  align-items: center;
 }
 .sv-root .notif-item:hover {
   background: var(--panel);
 }
 .sv-root .notif-item.unread {
   background: color-mix(in oklab, var(--accent), transparent 88%);
+}
+.sv-root .notif-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: transparent;
+  padding: 0;
+  margin-left: auto;
+  cursor: pointer;
+  transition: background 0.1s, opacity 0.15s;
+  align-self: center;
+}
+.sv-root .notif-dot.is-unread {
+  background: var(--accent);
+}
+.sv-root .notif-dot:hover {
+  opacity: 0.65;
+}
+.sv-root .notif-markall {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  margin-right: auto;
+}
+.sv-root .notif-markall:hover {
+  text-decoration: underline;
 }
 .sv-root .notif-body {
   min-width: 0;
@@ -341,7 +381,7 @@
 .sv-root .listhead {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -375,8 +415,8 @@
 .sv-root .list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  padding: 8px;
+  gap: 6px;
 }
 .sv-root .listdiv {
   font-size: 11px;
@@ -391,17 +431,20 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  padding: 11px 12px;
+  padding: 12px 16px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
 }
 .sv-root .row:hover {
+  background: var(--panel-2);
   border-color: var(--accent);
 }
 .sv-root .row.selected {
+  background: var(--panel-2);
   border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 .sv-root .pinbtn {
   font-size: 14px;
@@ -431,12 +474,13 @@
   cursor: default;
 }
 .sv-root .rmain {
+  flex: 1;
   min-width: 0;
 }
 .sv-root .rtitle {
   font-weight: 600;
   font-size: 14px;
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -461,6 +505,20 @@
   flex: none;
   white-space: nowrap;
 }
+.sv-root .rstat .ic-thumb {
+  vertical-align: -2px;
+}
+.sv-root .rprev {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 2px 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .sv-root .rcat {
   margin: 2px 0 6px;
   max-width: 100%;
@@ -483,21 +541,55 @@
 }
 
 /* ---- avatars ---- */
+.sv-root .avatar-wrap {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
 .sv-root .avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--panel-2);
 }
 .sv-root .avatar.sm {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 .sv-root .avatar.xs {
-  width: 16px;
-  height: 16px;
-  flex: none;
+  width: 28px;
+  height: 28px;
+}
+.sv-root .level-badge {
+  position: absolute;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #1d6ce0;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+.sv-root .level-badge[hidden] {
+  display: none;
+}
+
+/* ---- search term highlight ---- */
+.sv-root mark.sv-hl {
+  background: #e9b84a;
+  color: #000;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.sv-root[data-theme="minimax"] mark.sv-hl {
+  background: #fde68a;
 }
 
 /* ---- infinite-scroll sentinel ---- */
@@ -527,6 +619,10 @@
 .sv-root .dwrap {
   max-width: 680px;
   margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 24px 0;
 }
 .sv-root .pmeta {
   display: flex;
@@ -697,9 +793,11 @@
 
 /* ---- comments section (shell only — list + fetch is step 4b) ---- */
 .sv-root .comments {
-  margin-top: 22px;
+  margin-top: 20px;
+  margin-left: -24px;
+  margin-right: -24px;
+  padding: 16px 24px 20px;
   border-top: 1px solid var(--line);
-  padding-top: 16px;
 }
 .sv-root .chead-row {
   display: flex;
@@ -727,7 +825,7 @@
   padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background 0.1s ease, color 0.12s ease;
 }
 .sv-root .seg button:not(.on):hover {
   background: color-mix(in oklab, var(--panel-2), transparent 45%);
@@ -738,32 +836,81 @@
   color: var(--text);
 }
 .sv-root .composer {
-  display: flex;
-  gap: 10px;
   margin-bottom: 18px;
 }
-.sv-root .composer textarea {
+.sv-root .composer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.sv-root .composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sv-root .composer-actions .btn.sm {
+  margin-top: 0;
+}
+.sv-root .composer-pill {
   flex: 1;
-  resize: vertical;
-  min-height: 56px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
   background: var(--panel);
-  color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font: inherit;
+  border-radius: 18px;
+  padding: 6px 8px 6px 16px;
 }
-.sv-root .composer textarea:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.sv-root .composer textarea:focus-visible {
-  outline: none;
+.sv-root .composer-pill:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent), transparent 70%);
 }
-.sv-root .composer .btn {
-  align-self: stretch;
+.sv-root .composer-pill .mb {
+  flex: 1;
+}
+.sv-root .composer-pill textarea {
+  resize: none;
+  overflow-y: auto;
+  min-height: 20px;
+  max-height: 200px;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  padding: 6px 0;
+  font: inherit;
+}
+.sv-root .composer-pill textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sv-root .composer-pill textarea:focus-visible {
+  outline: none;
+}
+.sv-root .composer-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.sv-root .cicon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: default;
+}
+.sv-root .cicon .ic {
+  width: 16px;
+  height: 16px;
+}
+.sv-root .cicon-gif {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 .sv-root .cempty {
   color: var(--muted);
@@ -780,20 +927,19 @@
 .sv-root .comment {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
-  margin: 8px 0 0;
+  margin: 0 0 8px;
   padding: 12px;
-  background: var(--panel-2);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  transition: border-color 0.12s ease;
+  transition: background 0.1s ease, border-color 0.12s ease;
 }
 .sv-root .comment:hover {
+  background: var(--panel-2);
   border-color: var(--accent);
 }
 .sv-root .comment.reply {
   margin-left: 24px;
-  border-top: 1px dashed var(--rowdiv);
 }
 /* Brief highlight when a notification jumps to this comment. */
 .sv-root .comment.cflash {
@@ -851,7 +997,7 @@
   color: var(--muted);
   font: inherit;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition: color 0.1s ease;
 }
 .sv-root .cactions .clike:hover:not(:disabled) {
   color: var(--text);
@@ -871,36 +1017,26 @@
   font-weight: 600;
   padding: 0;
   cursor: pointer;
-  transition: color 0.12s ease;
+  transition: color 0.1s ease;
 }
 .sv-root .replybtn:hover {
   color: var(--accent-hover);
   text-decoration: underline;
 }
 .sv-root .replybox {
-  display: flex;
-  gap: 8px;
   margin: 8px 0 4px;
 }
-.sv-root .replybox textarea {
-  flex: 1;
-  resize: vertical;
-  min-height: 40px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font: inherit;
-  font-size: 14px;
+.sv-root .replybox .composer-pill {
+  width: 100%;
 }
-.sv-root .replybox textarea:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.sv-root .replybox-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
-.sv-root .replybox .btn.sm {
+.sv-root .replybox-actions .btn.sm {
   margin-top: 0;
-  align-self: center;
 }
 
 /* ---- screen-reader-only label (composer) ---- */
@@ -924,7 +1060,7 @@
   border-radius: 10px;
   padding: 0 16px;
   font-weight: 700;
-  transition: background 0.12s ease;
+  transition: background 0.1s ease;
 }
 .sv-root .btn:hover:not(:disabled) {
   background: var(--accent-hover);
@@ -937,6 +1073,14 @@
   padding: 6px 12px;
   font-size: 13px;
   margin-top: 10px;
+}
+.sv-root .btn.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+.sv-root .btn.ghost:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--panel-2), transparent 45%);
+  color: var(--text);
 }
 
 /* ---- mentions (step 5c): rendered @mention + composer autocomplete ---- */
@@ -1034,173 +1178,145 @@
   }
 }
 
-/* ===================== v0.3.2 additions ===================== */
-/* F11 — 2-line body preview in a list row */
-.sv-root .rprev {
-  color: var(--bodytext);
-  font-size: 12.5px;
-  line-height: 1.4;
-  margin: 2px 0 6px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-/* F11c — detail content wrapped in a card */
-.sv-root .detailcard {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 20px 22px;
-}
-/* F2 — level badge on an avatar */
-.sv-root .av-wrap {
+/* ---- search bar ---- */
+.sv-root .search-wrap {
   position: relative;
-  display: inline-flex;
-  flex: none;
-  line-height: 0;
-}
-.sv-root .level-badge {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  border-radius: 999px;
-  background: var(--level);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--panel);
-}
-/* F6 — community logo in the topbar */
-.sv-root .group-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  object-fit: cover;
-}
-/* F11e/F12 — collapsible Pinned header + 2px divider */
-.sv-root .pinned-header {
   display: flex;
   align-items: center;
-  padding: 2px 2px 0;
+  order: -1;
+  width: 80%;
+  margin: 0 auto 4px;
+}
+.sv-root .search-input {
+  width: 100%;
+  padding: 6px 28px 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+  outline: none;
+  transition: border-color 0.1s;
+}
+.sv-root .search-input::placeholder {
+  color: var(--muted);
+}
+.sv-root .search-input:focus {
+  border-color: var(--accent);
+}
+.sv-root .search-input::-webkit-search-cancel-button {
+  display: none;
+}
+.sv-root .search-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.sv-root .search-clear:hover {
+  color: var(--text);
+}
+
+/* ---- resize handle (draggable pane divider) ---- */
+.sv-root .resize-handle {
+  width: 5px;
+  flex: none;
+  cursor: col-resize;
+  background: var(--line);
+  transition: background 0.1s;
+  position: relative;
+  z-index: 1;
+}
+.sv-root .resize-handle:hover,
+.sv-root .resize-handle:active {
+  background: var(--accent);
+}
+
+
+/* ---- pinned header: collapsible + sort button ---- */
+.sv-root .listdiv.pinned-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
 }
 .sv-root .pinned-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  flex: 1;
   background: none;
-  border: 0;
-  padding: 0;
+  border: none;
   color: var(--muted);
+  font: inherit;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+.sv-root .pinned-toggle:hover {
+  color: var(--text);
 }
 .sv-root .pinned-chevron {
-  font-size: 10px;
-  transition: transform 0.15s ease;
+  display: inline-block;
+  transition: transform 0.3s;
+  font-size: 13px;
 }
 .sv-root .pinned-chevron.collapsed {
   transform: rotate(-90deg);
 }
-.sv-root .pinned-divider {
-  border-top: 2px solid var(--line);
-}
-/* F4 — draggable resize handle between panes */
-.sv-root .resize-handle {
-  flex: 0 0 6px;
-  cursor: col-resize;
-  position: relative;
-  background: transparent;
-  border: 0;
-  padding: 0;
-}
-.sv-root .resize-handle::after {
-  content: "";
-  position: absolute;
-  inset: 0 2px;
-  background: var(--line);
-  opacity: 0.6;
-}
-.sv-root .resize-handle:hover::after {
-  background: var(--accent);
-  opacity: 1;
-}
-/* F9 — notification read-dot (right) + mark-all */
-.sv-root .notif-item {
-  align-items: center;
-}
-.sv-root .notif-link {
-  display: flex;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
-}
-.sv-root .notif-dot {
-  flex: none;
-  margin-left: auto;
-  align-self: center;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 1px solid var(--muted);
-  background: transparent;
-  padding: 0;
+.sv-root .pinned-sort-sel {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
   cursor: pointer;
 }
-.sv-root .notif-item.unread .notif-dot {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.sv-root .np-markall {
-  background: none;
-  border: 0;
+
+/* ---- download button in the action row ---- */
+.sv-root .act.dl-btn {
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
+  border-color: var(--accent);
   cursor: pointer;
+  font-size: 13px;
 }
-/* F5 — floating zoom widget */
-.sv-root .zoom {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 60;
-  display: flex;
+.sv-root .act.dl-btn:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent), transparent 85%);
+}
+.sv-root .act.dl-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- zoom controls in the topbar (hidden — the floating widget replaces this) ---- */
+.sv-root .zoom-controls {
+  display: none;
   align-items: center;
   gap: 2px;
-  background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 3px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 2px 4px;
 }
-.sv-root .zoom button {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 15px;
+.sv-root .zoom-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
 }
-.sv-root .zoom button:hover {
-  background: var(--panel-2);
-}
-.sv-root .zoom .zpct {
-  min-width: 42px;
-  text-align: center;
+.sv-root .zoom-label {
   font-size: 12px;
   color: var(--muted);
+  min-width: 34px;
+  text-align: center;
 }

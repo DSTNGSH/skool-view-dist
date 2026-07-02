@@ -27,21 +27,3 @@ export function isPinned(post, localPinnedIds) {
   if (!post) return false;
   return Boolean(post.pinned) || localPinnedIds.has(post.id);
 }
-
-/**
- * Coerce a stored pin-ids value back to a plain string[]. Chrome's structured clone serialises a
- * Svelte reactive `Proxy(Array)` as a plain OBJECT (`{0:'a',1:'b'}`), so an `Array.isArray` check
- * on reload fails and every local pin is silently lost. Accepts an array, an array-like object, or
- * junk, and always returns a plain array of the string ids. Save through this so the stored value is
- * a real array; load through it to recover any object-shaped legacy value.
- * @param {unknown} value
- * @returns {string[]}
- */
-export function toIdArray(value) {
-  const arr = Array.isArray(value)
-    ? value
-    : value && typeof value === 'object'
-      ? Object.values(value)
-      : [];
-  return arr.filter((x) => typeof x === 'string');
-}

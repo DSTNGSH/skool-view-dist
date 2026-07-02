@@ -1,12 +1,7 @@
 {
   "addons": {
     "skool-view@local": {
-      "updates": [
-        {
-          "version": "0.3.2",
-          "update_link": "https://github.com/rocleemusic/skool-view-dist/releases/download/v0.3.2/skool-view-0.3.2.xpi"
-        }
-      ]
+      "updates": []
     }
   }
 }

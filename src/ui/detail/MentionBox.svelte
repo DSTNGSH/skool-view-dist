@@ -49,6 +49,18 @@
   /** @type {HTMLTextAreaElement | undefined} */
   let textarea = $state();
 
+  /** Grow the textarea to fit its content (shrinks back down when text is removed). */
+  function autosize() {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+  // Re-run whenever the bound value changes for any reason (typing, a picked mention, reset()).
+  $effect(() => {
+    void value;
+    autosize();
+  });
+
   // ---- autocomplete dropdown ----
   let open = $state(false);
   /** @type {MentionUser[]} */

@@ -1,40 +1,41 @@
 # Install skool-view (Chrome / Edge / Brave)
 
-A faster, custom view over Skool communities. It runs **entirely in your own browser** using **your
-own logged-in Skool session** — there's no central server and no shared credentials.
+Persoonlijke fork, lokaal gebouwd. Draait **volledig in je eigen browser** met je **eigen ingelogde
+Skool-sessie** — geen centrale server, geen gedeelde credentials.
 
-> Chrome support ships as an **unpacked** extension for now (you load it yourself). A one-click
-> Chrome Web Store version is planned. On **Firefox**? Use [`INSTALL.md`](INSTALL.md) instead.
+> Deze fork bouwt alleen de **Chrome**-variant (unpacked). Geen releases-pagina, geen zip-download —
+> je bouwt zelf lokaal vanuit de broncode. Firefox: niet gebouwd/getest in deze fork.
 
 ## Install
 
-1. Download the latest **`skool-view-chrome-<version>.zip`** from the
-   [releases page](https://github.com/rocleemusic/skool-view-dist/releases/latest).
-2. **Unzip it into a permanent folder** — e.g. `Documents\skool-view-chrome`. Don't delete or move
-   this folder afterward: Chrome loads the extension from it on every launch, so if it moves or
-   disappears, the extension breaks.
-3. Open **`chrome://extensions`** (Edge: `edge://extensions`, Brave: `brave://extensions`).
-4. Turn on **Developer mode** (toggle, top-right).
-5. Click **Load unpacked** and select the unzipped folder.
-6. Open the toolbar's **puzzle-piece** menu and **pin** skool-view so its button shows.
+1. Bouw de extensie lokaal:
+   ```bash
+   npm install
+   npm run build:chrome
+   ```
+   Output komt in `dist/`.
+2. Open **`chrome://extensions`** (Edge: `edge://extensions`, Brave: `brave://extensions`).
+3. Zet **Developer mode** aan (schakelaar rechtsboven).
+4. Klik **Load unpacked** en selecteer de `dist/`-map. Verplaats of verwijder deze map daarna niet —
+   Chrome laadt de extensie er bij elke start opnieuw uit.
+5. Open het puzzelstukje-menu in de toolbar en **pin** skool-view zodat de knop zichtbaar blijft.
 
 ## Use it
 
-1. Go to any Skool community you're a member of.
-2. Click the **skool-view toolbar button** — or press **`Alt+S`** — to toggle the custom view on/off.
+1. Ga naar een Skool-community waar je lid van bent.
+2. Klik op de **skool-view-toolbarknop** — of druk op **`Alt+S`** — om de weergave aan/uit te zetten.
 
-## What it can access, and why (same as Firefox)
+## What it can access, and why
 
-- **`skool.com` only** — it never runs on any other site.
-- **Your session cookies** — so it can read and post **as you**, exactly like the normal site.
-  Nothing is sent anywhere except Skool's own servers; there is no skool-view server.
-- **Local storage** — remembers your theme + whether the view is on.
+- Alleen **`skool.com`** — draait op geen enkele andere site.
+- **Je sessiecookies** — zodat het kan lezen en posten **als jou**, precies zoals de normale site.
+  Niets wordt ergens anders naartoe gestuurd dan Skool's eigen servers; er is geen skool-view-server.
+- **Lokale opslag** — onthoudt thema + of de weergave aanstaat.
 
 ## Updates
 
-Unpacked extensions **do not auto-update**. When a new version ships: download the new zip, unzip it
-over the same folder (replace the files), then click the **reload** icon on the skool-view card in
-`chrome://extensions`.
+Unpacked extensies updaten **niet automatisch**. Bij een wijziging: `npm run build:chrome` opnieuw
+draaien, dan het **herlaad**-icoontje op de skool-view-kaart in `chrome://extensions` klikken.
 
 ## Uninstall
 
@@ -42,7 +43,7 @@ over the same folder (replace the files), then click the **reload** icon on the 
 
 ## Notes
 
-- A "Disable developer-mode extensions" prompt may appear on startup — that's expected for unpacked
-  extensions; dismiss it.
-- Managed/work machines often block unpacked extensions by policy. If **Load unpacked** is greyed
-  out, that's why.
+- Een "Disable developer-mode extensions"-melding kan bij opstarten verschijnen — normaal voor
+  unpacked extensies, gewoon wegklikken.
+- Beheerde/werk-machines blokkeren unpacked extensies soms via beleid. Is **Load unpacked**
+  grijs/uitgeschakeld, dan is dat de reden.

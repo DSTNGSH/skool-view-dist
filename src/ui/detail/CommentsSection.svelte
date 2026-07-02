@@ -16,6 +16,8 @@
   import { getWafToken, clearWafToken } from '../waf.js';
   import Comment from './Comment.svelte';
   import MentionBox from './MentionBox.svelte';
+  import Avatar from '../Avatar.svelte';
+  import ComposerIcons from './ComposerIcons.svelte';
 
   /**
    * @typedef {import('../../skool/map.js').CommentView} CommentView
@@ -35,8 +37,9 @@
    * @property {(id: string, handle: string) => void} [registerMention] Record a user id->handle.
    * @property {number} [refreshNonce] Bumped by a manual refresh to force a comments re-fetch.
    * @property {string} [highlightCommentId] A comment to scroll to + highlight (from a notification).
-   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
-   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
+   * @property {(comments: CommentView[]) => void} [onCommentsChange] Fires whenever the loaded
+   *   comment list changes — used by the download-as-Markdown action, which needs the currently
+   *   loaded comments without re-fetching them.
    */
   /** @type {Props} */
   let {
@@ -51,8 +54,7 @@
     registerMention,
     refreshNonce = 0,
     highlightCommentId = '',
-    levelFor,
-    requestLevel,
+    onCommentsChange,
   } = $props();
 
   /** @type {HTMLDivElement | undefined} */
@@ -81,6 +83,8 @@
 
   // A request token guards against out-of-order responses when the user switches posts mid-fetch.
   let requestToken = 0;
+
+  $effect(() => { onCommentsChange?.(comments); });
 
   /**
    * Load the selected post's comments. Re-runs whenever postId/groupId change (see $effect below).
@@ -125,19 +129,40 @@
     void load(postId, groupId);
   }
 
-  /** Load the next page of top-level comments (Skool's "show more"), appending + de-duping. */
+  /**
+   * Load the next page of top-level comments (Skool's "show more"), appending + de-duping.
+   * `commentsHasMore` tracks the server's own `hasMore` — it must not depend on this page
+   * actually containing fresh items, or a page of only duplicates would hide the button forever
+   * even though more comments exist. Instead, a page with zero fresh items auto-paginates
+   * (bounded attempts, stopping if the cursor stalls) so the button's presence always reflects
+   * whether more is really available.
+   */
   async function loadMoreComments() {
     if (loadingMore || !commentsHasMore || commentsCursor == null) return;
     loadingMore = true;
     try {
-      const wafToken = await tokenFn();
-      const result = await fetchComments({ postId, groupId, wafToken, createdGt: commentsCursor });
-      const have = new Set(comments.map((c) => c.id));
-      const fresh = result.items.filter((c) => !have.has(c.id));
-      comments = [...comments, ...fresh];
-      registerAuthors(fresh);
-      commentsCursor = result.cursor;
-      commentsHasMore = result.hasMore && fresh.length > 0;
+      let cursor = commentsCursor;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const wafToken = await tokenFn();
+        const result = await fetchComments({ postId, groupId, wafToken, createdGt: cursor });
+        const have = new Set(comments.map((c) => c.id));
+        const fresh = result.items.filter((c) => !have.has(c.id));
+        if (fresh.length > 0) {
+          comments = [...comments, ...fresh];
+          registerAuthors(fresh);
+        }
+        commentsHasMore = result.hasMore;
+        if (result.cursor == null) {
+          commentsCursor = null;
+          break;
+        }
+        const cursorAdvanced = result.cursor !== cursor;
+        commentsCursor = result.cursor;
+        cursor = result.cursor;
+        // Stop once we've added something, the server says there's no more, or the cursor
+        // stopped moving (would otherwise loop forever on a stalled all-duplicates page).
+        if (fresh.length > 0 || !result.hasMore || !cursorAdvanced) break;
+      }
     } catch (err) {
       // Keep what's loaded; a 403 means a stale WAF token — clear it so a retry re-reads.
       if (err instanceof Error && /\b403\b/.test(err.message)) clearWafToken();
@@ -171,6 +196,13 @@
       setTimeout(() => node.classList.remove('cflash'), 2000);
     });
   });
+
+  /** Discard the in-progress top-level comment draft (the "Cancel" action). */
+  function cancelCompose() {
+    composer?.reset();
+    draft = '';
+    composeErr = '';
+  }
 
   /**
    * Post a top-level comment. parent_id == root_id == the post. Prepends the new comment
@@ -314,25 +346,37 @@
   </div>
 
   <div class="composer">
-    <MentionBox
-      bind:this={composer}
-      bind:value={draft}
-      ariaLabel="Write a comment"
-      placeholder="Write a comment…"
-      disabled={sending}
-      {groupId}
-      {tokenFn}
-      onRegister={registerMention}
-    />
-    <button
-      class="btn"
-      type="button"
-      disabled={sending || !draft.trim()}
-      aria-busy={sending}
-      onclick={sendComment}
-    >
-      {sending ? 'Posting…' : 'Comment'}
-    </button>
+    <div class="composer-row">
+      <Avatar src={currentUser?.avatar} size="sm" />
+      <div class="composer-pill">
+        <MentionBox
+          bind:this={composer}
+          bind:value={draft}
+          ariaLabel="Write a comment"
+          placeholder="Write a comment…"
+          rows={1}
+          disabled={sending}
+          {groupId}
+          {tokenFn}
+          onRegister={registerMention}
+        />
+        <ComposerIcons />
+      </div>
+    </div>
+    <div class="composer-actions">
+      <button class="btn ghost sm" type="button" disabled={sending} onclick={cancelCompose}>
+        Cancel
+      </button>
+      <button
+        class="btn sm"
+        type="button"
+        disabled={sending || !draft.trim()}
+        aria-busy={sending}
+        onclick={sendComment}
+      >
+        {sending ? 'Posting…' : 'Comment'}
+      </button>
+    </div>
   </div>
   {#if composeErr}
     <div class="acterr" role="status">{composeErr}</div>
@@ -350,7 +394,7 @@
       <div class="cempty">No comments yet — be the first to comment.</div>
     {:else if sort === 'time'}
       {#each flatByTime as comment (comment.id)}
-        <Comment {comment} {postId} {groupId} {currentUser} {tokenFn} {mentionHref} {registerMention} {levelFor} {requestLevel} createCommentFn={createCommentFn} />
+        <Comment {comment} {postId} {groupId} {currentUser} {tokenFn} {mentionHref} {registerMention} createCommentFn={createCommentFn} />
       {/each}
     {:else}
       {#each comments as comment (comment.id)}
@@ -363,8 +407,6 @@
           {tokenFn}
           {mentionHref}
           {registerMention}
-          {levelFor}
-          {requestLevel}
           createCommentFn={createCommentFn}
           onReply={(reply) => appendReply(comment.id, reply)}
         />
@@ -382,8 +424,6 @@
                 {tokenFn}
                 {mentionHref}
                 {registerMention}
-                {levelFor}
-                {requestLevel}
                 createCommentFn={createCommentFn}
                 onReply={(r) => appendReply(comment.id, r)}
               />

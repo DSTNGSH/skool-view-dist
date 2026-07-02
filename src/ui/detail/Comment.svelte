@@ -14,6 +14,7 @@
   import Thumb from './Thumb.svelte';
   import MentionBox from './MentionBox.svelte';
   import AttachmentList from './AttachmentList.svelte';
+  import ComposerIcons from './ComposerIcons.svelte';
   import { commentTime, compactCount } from '../lib/format.js';
   import { toHtml } from '../../skool/markup.js';
   import { vote, createComment } from '../../skool/write.js';
@@ -40,8 +41,6 @@
    * @property {typeof vote} [voteFn] Injectable like write.
    * @property {typeof createComment} [createCommentFn] Injectable reply write.
    * @property {typeof getWafToken} [tokenFn] Injectable WAF-token getter.
-   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
-   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
    */
   /** @type {Props} */
   let {
@@ -58,14 +57,7 @@
     tokenFn = getWafToken,
     mentionHref,
     registerMention,
-    levelFor,
-    requestLevel,
   } = $props();
-
-  // F2 — request this comment author's level on demand (cached upstream); the badge fills in reactively.
-  $effect(() => {
-    if (comment.author.id) requestLevel?.(comment.author.id);
-  });
 
   /** @type {{ serialize: () => string, reset: () => void } | undefined} */
   let replyBox = $state();
@@ -130,6 +122,14 @@
     replying = !replying;
   }
 
+  /** Discard the in-progress reply and close the composer (the "Cancel" action). */
+  function cancelReply() {
+    replyBox?.reset();
+    draft = '';
+    replyErr = '';
+    replying = false;
+  }
+
   async function sendReply() {
     const visible = draft.trim();
     if (!visible || sending) return;
@@ -192,7 +192,12 @@
 </script>
 
 <div class="comment" class:reply={isReply} data-cid={comment.id}>
-  <Avatar src={comment.author.avatar} size="sm" level={levelFor?.(comment.author.id)} />
+  <Avatar
+    src={comment.author.avatar}
+    level={comment.author.level}
+    authorName={comment.author.name}
+    size="sm"
+  />
   <div class="cbody">
     <div class="crow">
       <span class="who">{comment.author.name}</span>
@@ -232,27 +237,35 @@
 
     {#if replying}
       <div class="replybox">
-        <MentionBox
-          bind:this={replyBox}
-          bind:value={draft}
-          ariaLabel="Write a reply"
-          placeholder="Reply…"
-          rows={2}
-          disabled={sending}
-          {groupId}
-          {tokenFn}
-          {seed}
-          onRegister={registerMention}
-        />
-        <button
-          class="btn sm"
-          type="button"
-          disabled={sending || !draft.trim()}
-          aria-busy={sending}
-          onclick={sendReply}
-        >
-          {sending ? 'Posting…' : 'Reply'}
-        </button>
+        <div class="composer-pill">
+          <MentionBox
+            bind:this={replyBox}
+            bind:value={draft}
+            ariaLabel="Write a reply"
+            placeholder="Reply…"
+            rows={1}
+            disabled={sending}
+            {groupId}
+            {tokenFn}
+            {seed}
+            onRegister={registerMention}
+          />
+          <ComposerIcons />
+        </div>
+        <div class="replybox-actions">
+          <button class="btn ghost sm" type="button" disabled={sending} onclick={cancelReply}>
+            Cancel
+          </button>
+          <button
+            class="btn sm"
+            type="button"
+            disabled={sending || !draft.trim()}
+            aria-busy={sending}
+            onclick={sendReply}
+          >
+            {sending ? 'Posting…' : 'Comment'}
+          </button>
+        </div>
       </div>
       {#if replyErr}
         <div class="acterr" role="status">{replyErr}</div>

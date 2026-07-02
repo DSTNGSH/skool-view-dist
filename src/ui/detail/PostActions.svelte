@@ -18,6 +18,7 @@
   import { compactCount } from '../lib/format.js';
   import { vote } from '../../skool/write.js';
   import { getWafToken, clearWafToken } from '../waf.js';
+  import { downloadPostAsMarkdown } from '../lib/download.js';
 
   /**
    * @typedef {object} Props
@@ -28,6 +29,12 @@
    * @property {(id: string) => void} [onTogglePin] Toggle this post's local pin.
    * @property {typeof vote} [voteFn] Injectable write for tests/preview.
    * @property {typeof getWafToken} [tokenFn] Injectable WAF-token getter.
+   * @property {import('../../skool/map.js').PostView} [post] Full post view-model — needed for
+   *   the "Download as Markdown" action (title, content, author, url).
+   * @property {import('../../skool/map.js').CommentView[]} [comments] Currently loaded comments,
+   *   included in the downloaded Markdown when present.
+   * @property {string} [categoryName] Resolved category label, included in the download header.
+   * @property {string} [slug] Community slug, used to build the canonical post URL.
    */
   /** @type {Props} */
   let {
@@ -38,7 +45,27 @@
     onTogglePin,
     voteFn = vote,
     tokenFn = getWafToken,
+    post,
+    comments = [],
+    categoryName = '',
+    slug = '',
   } = $props();
+
+  let downloading = $state(false);
+  let downloadErr = $state(false);
+
+  async function handleDownload() {
+    if (downloading || !post) return;
+    downloading = true;
+    downloadErr = false;
+    try {
+      await downloadPostAsMarkdown({ post, comments, categoryName, slug });
+    } catch {
+      downloadErr = true;
+    } finally {
+      downloading = false;
+    }
+  }
 
   let liked = $state(false);
   // Seeded from `upvotes` by the $effect below (also re-seeds when a different post is shown —
@@ -108,7 +135,27 @@
   >
     📌 {pinned ? 'Pinned' : 'Pin'}
   </button>
+  <button
+    class="act dl-btn"
+    type="button"
+    disabled={downloading || !post}
+    aria-busy={downloading}
+    aria-label="Download post as Markdown file"
+    title="Download as Markdown"
+    onclick={handleDownload}
+  >
+    <svg class="ic-thumb" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 3a1 1 0 0 1 1 1v10.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.42l3.3 3.3V4a1 1 0 0 1 1-1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"
+      />
+    </svg>
+    {downloading ? 'Saving…' : 'Save'}
+  </button>
   {#if errored}
     <span class="acterr" role="status">Couldn't save — try again</span>
+  {/if}
+  {#if downloadErr}
+    <span class="acterr" role="status">Download failed — try again</span>
   {/if}
 </div>

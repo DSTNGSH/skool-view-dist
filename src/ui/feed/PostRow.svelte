@@ -1,10 +1,17 @@
 <script>
-  // A single feed list row: pin TOGGLE, title, category chip, author avatar + name + date +
-  // ▲likes + 💬comments. Clicking the row opens the post; clicking the pin toggles a LOCAL pin
-  // (client-side only — see skool/pins.js) without opening the post. Natively-pinned posts show
-  // the pin lit + disabled: Skool pins are read-only, we never unpin them.
+  // A single feed list row: pin TOGGLE, title, a short body preview, category chip, author avatar
+  // + name + relative age + thumb-icon likes + 💬comments. Clicking the row opens the post;
+  // clicking the pin toggles a LOCAL pin (client-side only — see skool/pins.js) without opening
+  // the post. Natively-pinned posts show the pin lit + disabled: Skool pins are read-only, we
+  // never unpin them.
+  //
+  // The like count uses the same `Thumb` SVG as the post/comment action rows (inherits
+  // `currentColor`, themeable) rather than the 👍 emoji, which renders in a fixed platform color
+  // that CSS can't touch.
   import Avatar from '../Avatar.svelte';
+  import Thumb from '../detail/Thumb.svelte';
   import { relativeTime, compactCount } from '../lib/format.js';
+  import { getStatOverride } from './statOverrides.svelte.js';
 
   /**
    * @typedef {object} Props
@@ -15,16 +22,20 @@
    * @property {boolean} nativePinned Pinned by Skool (read-only — toggle disabled).
    * @property {(id: string) => void} onSelect
    * @property {(id: string) => void} onTogglePin
-   * @property {number} [level] Author's member level (F2 badge), if known.
-   * @property {(userId: string) => void} [onNeedLevel] Request this author's level on demand.
    */
   /** @type {Props} */
-  let { post, categoryName, selected, pinned, nativePinned, onSelect, onTogglePin, level, onNeedLevel } = $props();
+  let { post, categoryName, selected, pinned, nativePinned, onSelect, onTogglePin } = $props();
 
-  // F2 — ask App to fetch this author's level once (cached upstream); the badge fills in reactively.
-  $effect(() => {
-    if (post.author.id) onNeedLevel?.(post.author.id);
+  const preview = $derived.by(() => {
+    const txt = (post.contentText || '').trim();
+    return txt.length > 110 ? `${txt.slice(0, 110)}…` : txt;
   });
+
+  // The feed-listing payload's upvotes/comments are a metadata snapshot that can lag behind
+  // reality; prefer the override once the background prefetch (statOverrides.svelte.js) has
+  // fetched the real counts for this post.
+  const displayUpvotes = $derived(getStatOverride(post.id)?.upvotes ?? post.upvotes);
+  const displayComments = $derived(getStatOverride(post.id)?.comments ?? post.comments);
 
   /** True when an event originated on the pin button (so the row ignores it). */
   const fromPin = (/** @type {Event} */ e) =>
@@ -69,18 +80,18 @@
   </button>
   <div class="rmain">
     <div class="rtitle">{post.title}</div>
+    {#if preview}
+      <p class="rprev">{preview}</p>
+    {/if}
     {#if categoryName}
       <div class="rcat"><span class="catchip">{categoryName}</span></div>
     {/if}
-    {#if post.contentText}
-      <div class="rprev">{post.contentText}</div>
-    {/if}
     <div class="rmeta">
-      <Avatar src={post.author.avatar} size="sm" {level} />
+      <Avatar src={post.author.avatar} level={post.author.level} authorName={post.author.name} size="xs" />
       <span class="rname">{post.author.name}</span>
       <span class="rstat"
-        >· {relativeTime(post.created)} · ▲{compactCount(post.upvotes)} · 💬{compactCount(
-          post.comments,
+        >· {relativeTime(post.created)} · <Thumb />{compactCount(displayUpvotes)} · 💬{compactCount(
+          displayComments,
         )}</span
       >
     </div>

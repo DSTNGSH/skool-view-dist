@@ -7,7 +7,6 @@
 // crawl/sort logic it feeds is covered headlessly by unit tests in the source repo.
 
 import browser from 'webextension-polyfill';
-import { toIdArray } from '../../skool/pins.js';
 
 /** @typedef {import('../../skool/map.js').PostView} PostView */
 
@@ -16,8 +15,14 @@ const cacheKey = (slug) => `skfeed:${slug}`;
 /** @param {string} slug @returns {string} */
 const pinsKey = (slug) => `skpins:${slug}`;
 
+// A cache older than this is discarded rather than hydrated — the instant-paint hydrate is only
+// worth showing while it's a plausible approximation of the current feed; past this age we'd
+// rather show the loading state and wait for a fresh crawl than flash stale posts.
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Load the cached post corpus for a community. Returns [] on a miss or any storage error.
+ * Load the cached post corpus for a community. Returns [] on a miss, a stale (>24h) entry, or any
+ * storage error.
  * @param {string} slug
  * @returns {Promise<PostView[]>}
  */
@@ -25,7 +30,8 @@ export async function loadCachedFeed(slug) {
   try {
     const key = cacheKey(slug);
     const got = await browser.storage.local.get(key);
-    const entry = /** @type {{ posts?: unknown }} */ (got?.[key] ?? {});
+    const entry = /** @type {{ posts?: unknown, fetchedAt?: number }} */ (got?.[key] ?? {});
+    if (entry.fetchedAt && Date.now() - entry.fetchedAt > CACHE_MAX_AGE_MS) return [];
     return Array.isArray(entry.posts) ? /** @type {PostView[]} */ (entry.posts) : [];
   } catch {
     return [];
@@ -58,7 +64,7 @@ export async function loadPinnedIds(slug) {
     const key = pinsKey(slug);
     const got = await browser.storage.local.get(key);
     const ids = /** @type {unknown} */ (got?.[key]);
-    return toIdArray(ids); // tolerant: also recovers an object-shaped legacy value from before the fix
+    return Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
   } catch {
     return [];
   }
@@ -72,9 +78,7 @@ export async function loadPinnedIds(slug) {
  */
 export async function savePinnedIds(slug, ids) {
   try {
-    // toIdArray coerces a Svelte reactive Proxy(Array) to a plain array; Chrome otherwise serialises
-    // the proxy as an object and the load-side check drops every pin (see pins.toIdArray).
-    await browser.storage.local.set({ [pinsKey(slug)]: toIdArray(ids) });
+    await browser.storage.local.set({ [pinsKey(slug)]: ids });
   } catch {
     // best-effort — a failed write just means a pin won't survive a reload.
   }

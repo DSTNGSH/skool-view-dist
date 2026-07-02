@@ -4,16 +4,7 @@ import App from '../ui/App.svelte';
 // Overlay CSS imported as a raw string so we can inject it into the shadow root.
 // A head-injected <style> tag would NOT cross the shadow boundary.
 import overlayCss from '../ui/overlay.css?inline';
-import { installCapture } from '../skool/capture.js';
-
-// TEMP — capture build only (`npm run build:capture`, MODE === 'capture'); the guarded call is
-// tree-shaken out of normal firefox/chrome builds. Logs Skool API calls to the PAGE console,
-// dumping FULL JSON for the endpoints we still need to confirm: /users/{id}/preview (F2 level) and
-// /messages/{id} (F9 mark-read). Remove this block + the import once C1/C2 are captured.
-// @ts-ignore — import.meta.env.MODE is a Vite build-time constant (not typed in jsconfig).
-if (import.meta.env.MODE === 'capture') {
-  installCapture({ verboseFor: /\/(users|messages)\//i });
-}
+import { mountZoomWidget, unmountZoomWidget } from './zoomWidget.js';
 
 // Content script. Responsibility: mount/unmount the overlay into an open Shadow DOM,
 // keep the host node alive against Skool's SPA, and obey toggle messages + initial state.
@@ -63,9 +54,10 @@ function mountOverlay() {
   });
 
   observeBody();
+  mountZoomWidget(hostElement);
 }
 
-// Tear down the app, the shadow host, and the observer.
+// Tear down the app, the shadow host, the zoom widget, and the observer.
 function unmountOverlay() {
   stopObservingBody();
   if (appInstance) {
@@ -77,6 +69,7 @@ function unmountOverlay() {
   }
   hostElement = null;
   shadowRoot = null;
+  unmountZoomWidget();
 }
 
 // Re-assert the host if Skool's SPA strips it from <body> while the overlay is active.
@@ -103,6 +96,9 @@ function setOverlay(on) {
   overlayOn = on;
   if (on) mountOverlay();
   else unmountOverlay();
+  // Lock page scroll behind the overlay (it's a fixed full-viewport layer, but Skool's own page
+  // can still scroll underneath it without this).
+  document.documentElement.style.overflow = on ? 'hidden' : '';
 }
 
 // Ask the background to flip this tab off (keeps storage.session authoritative).
@@ -119,32 +115,16 @@ browser.runtime.onMessage.addListener((/** @type {unknown} */ message) => {
   return undefined;
 });
 
-// F10 — Escape closes the overlay, but YIELDS to an open lightbox / mention dropdown inside it
-// (those own Escape first). We check the shadow DOM for them rather than racing keydown listeners,
-// so the first Escape closes the inner thing (via its own handler) and the next closes the overlay.
-window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || !overlayOn || e.defaultPrevented) return;
-  if (shadowRoot?.querySelector('.lightbox, .mb-list')) return;
-  requestToggleOff();
-});
-
-// F10 — browser back/forward dismisses the overlay so it doesn't strand over a newly-navigated page.
-window.addEventListener('popstate', () => {
-  if (overlayOn) requestToggleOff();
-});
-
-// On (re)load the overlay always starts CLOSED (F10) — even if this tab had it open before the
-// reload. If the background still thinks this tab is on, flip its stored state off so a later
-// toolbar toggle (Alt+Shift+C) opens fresh rather than "closing" an already-hidden overlay.
+// On (re)load, restore this tab's state from the background's storage.session.
 async function restoreInitialState() {
-  setOverlay(false);
   try {
     const reply = /** @type {{ on?: boolean }} */ (
       await browser.runtime.sendMessage({ type: 'skool-view:get-overlay' })
     );
-    if (reply?.on === true) requestToggleOff();
+    setOverlay(reply?.on === true);
   } catch {
-    // Background not ready — already closed.
+    // Background not ready; default to off.
+    setOverlay(false);
   }
 }
 

@@ -36,13 +36,11 @@ function describeShape(value) {
 
 /**
  * Install fetch + XHR wrappers that log Skool API calls. Idempotent. Returns an uninstall fn.
- * @param {{ label?: string, verboseFor?: RegExp }} [options] `verboseFor` logs the FULL JSON body
- *   (not just the shape) for URLs it matches — for pinning down a specific endpoint's fields.
+ * @param {{ label?: string }} [options]
  * @returns {() => void} Restores the original fetch/XHR.
  */
 export function installCapture(options = {}) {
   const label = options.label ?? 'skool-view:capture';
-  const verboseFor = options.verboseFor ?? null;
   if (!inBrowser()) {
     return () => {};
   }
@@ -69,9 +67,8 @@ export function installCapture(options = {}) {
       response
         .clone()
         .json()
-        .then((/** @type {unknown} */ body) =>
-          console.log(`[${label}] fetch`, url, verboseFor?.test(url) ? body : describeShape(body)))
-        .catch(() => console.log(`[${label}] fetch`, url, '(non-JSON)'));
+        .then((/** @type {unknown} */ body) => console.info(`[${label}] fetch`, url, describeShape(body)))
+        .catch(() => console.info(`[${label}] fetch`, url, '(non-JSON)'));
     }
     return response;
   };
@@ -92,13 +89,13 @@ export function installCapture(options = {}) {
     const url = this.__skoolCaptureUrl;
     if (url && isSkoolUrl(String(url))) {
       this.addEventListener('load', () => {
+        let shape = '(unparsed)';
         try {
-          const parsed = JSON.parse(this.responseText);
-          const u = String(url);
-          console.log(`[${label}] xhr`, url, verboseFor?.test(u) ? parsed : describeShape(parsed));
+          shape = describeShape(JSON.parse(this.responseText));
         } catch {
-          console.log(`[${label}] xhr`, url, '(unparsed)');
+          /* non-JSON response */
         }
+        console.info(`[${label}] xhr`, url, shape);
       });
     }
     // @ts-ignore
@@ -107,7 +104,7 @@ export function installCapture(options = {}) {
 
   // @ts-ignore
   window.__skoolViewCaptureInstalled = true;
-  console.log(`[${label}] installed — logging Skool API calls`);
+  console.info(`[${label}] installed — logging Skool API calls`);
 
   return () => {
     window.fetch = originalFetch;

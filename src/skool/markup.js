@@ -37,6 +37,8 @@ const TAG_PATTERN = /\[\/?[a-z][^\]]*\]/gi;
 const ESCAPED_PARENS = /\\([()])/g;
 // Three or more newlines in a row.
 const EXCESS_NEWLINES = /\n{3,}/g;
+// Control characters (incl. tab/newline) that can hide inside a url to evade a scheme check.
+const CONTROL_CHARS = /[\x00-\x1F\x7F]/g;
 
 /**
  * Skool encodes mentions as `[@Name](obj://user/ID)`. `obj://` is an internal scheme, not a
@@ -47,6 +49,20 @@ const EXCESS_NEWLINES = /\n{3,}/g;
  */
 function isObjUrl(url) {
   return /^obj:\/\//i.test(url.trim());
+}
+
+/**
+ * A url is only rendered as a clickable `<a href>` if its scheme is safe. Trim, strip control
+ * characters (they evade scheme checks, e.g. `java\tscript:` or `java\nscript:`), lowercase, then
+ * require an http/https/mailto scheme. Everything else (javascript:, data:, vbscript:, file:, ...)
+ * is blocked so hostile user-content links can't execute. Mirrors the `obj://` guard: not safe ->
+ * not an anchor, just the (escaped) label text.
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isSafeHref(url) {
+  const normalized = url.trim().replace(CONTROL_CHARS, '').toLowerCase();
+  return /^(https?|mailto):/.test(normalized);
 }
 
 /**
@@ -117,6 +133,11 @@ export function toHtml(raw, opts = {}) {
     const text = normalized.trim() || href;
     const lead = /^\s/.test(normalized) ? ' ' : '';
     const trail = /\s$/.test(normalized) && normalized.trim() ? ' ' : '';
+    // Only http/https/mailto become clickable. Any other scheme (javascript:, data:, ...) is a
+    // potential XSS vector in hostile user-content, so render just the (already escaped) label.
+    if (!isSafeHref(href)) {
+      return `${lead}${text}${trail}`;
+    }
     return `${lead}<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>${trail}`;
   });
 

@@ -1,38 +1,54 @@
 # skool-view
 
-A custom, **local-first** browser-extension client for Skool communities (Firefox first). It renders
-a faster, two-pane view over the same data Skool already serves to your logged-in browser — no central
-server, no shared credentials. Each user runs it in their own authenticated session.
+Persoonlijke, **local-first** browser-extensie voor Skool-communities. Rendert een snellere,
+tweekoloms weergave over dezelfde data die Skool al levert aan je ingelogde browser — geen
+centrale server, geen gedeelde credentials. Draait volledig binnen je eigen ingelogde sessie.
 
-The overlay is **off by default**; toggle it on the active Skool tab with the toolbar button or **Alt+S**.
+Dit is een **eigen fork** van [rocleemusic/skool-view-dist](https://github.com/rocleemusic/skool-view-dist)
+(GPL-3.0), doorontwikkeld voor eigen gebruik. Basisstructuur en kernlogica komen van het origineel;
+zie `LICENSE` voor de licentievoorwaarden.
 
-## Install (Firefox)
+De overlay staat **standaard uit**; aanzetten op de actieve Skool-tab via de toolbar-knop of **Alt+S**.
 
-Download the latest Mozilla-signed `.xpi` from the
-[Releases](https://github.com/rocleemusic/skool-view-dist/releases) page and open it in Firefox.
-Installed copies auto-update via this repo's `updates.json`. Step-by-step instructions:
-[`docs/INSTALL.md`](docs/INSTALL.md).
+## Deze fork versus het origineel
+
+Alleen **Chrome** wordt gebouwd en gebruikt (unpacked, lokaal). Firefox-ondersteuning uit het
+origineel is aanwezig in de broncode maar wordt in deze fork niet gebouwd of getest.
+
+Eigen toevoegingen bovenop het origineel:
+- **Tel-systeem** (`ui/feed/statOverrides.svelte.js`) — corrigeert verouderde like/reactie-aantallen
+  uit de feed-lijst door het volledige bericht op de achtergrond op te halen.
+- **Memberlevel-cache** (`ui/memberLevels.svelte.js`) — leaderboard-scrape als fallback voor de
+  levelbadge.
+- **Zoom-widget** (`content/zoomWidget.js`).
+- **Download als Markdown** (`ui/lib/download.js`) — een post + reacties wegschrijven als
+  `.md`-bestand.
+- **Zoekfunctie** (`ui/searchQuery.svelte.js` + `FeedList.svelte`) — doorzoekt de lokaal gecrawlde
+  corpus op titel, tekst en auteur.
+- **Composer-vormgeving** (`ui/detail/ComposerIcons.svelte`) — het commentveld pixelgetrouw gemaakt
+  aan Skool's eigen weergave (avatar, pil-vorm, iconenrij, Cancel/Comment-knoppen).
+
+Volledige wijzigingsgeschiedenis van deze fork staat niet hier, maar in de workspace-logboeken:
+`Kennis/Logboeken/Scripts/Html/Geheugenlogboek_Weergeven_Skool_ChromeExtensie/`.
 
 ## Build from source
 
 ```bash
 npm install
-npm run dev      # vite watch build; web-ext opens Firefox on skool.com
-npm run build    # production build into dist/
-npm run check    # svelte-check / type check
+npm run build:chrome   # productie-build voor Chrome, output in dist/
+npm run check          # svelte-check / type check
 ```
 
-To load a `dist/` build manually instead: Firefox → `about:debugging` → **This Firefox** →
-**Load Temporary Add-on…** → select `dist/manifest.json`, then visit a Skool community and press
-**Alt+S**.
+Laden in Chrome: `chrome://extensions` → Developer mode aan → **Load unpacked** → selecteer de
+`dist/`-map. Ga daarna naar een Skool-community en druk op **Alt+S**.
 
 ## How it works
 
-- **Manifest V3** extension — Svelte + Vite, Firefox-first.
-- Reads come from Skool's own data routes; the overlay mounts into a Shadow DOM root on the active tab.
-- A small, data-driven mapping layer (`src/skool/mapping.json`) isolates Skool's response shapes, so a
-  field rename is a one-file fix.
+- **Manifest V3**-extensie — Svelte + Vite.
+- Reads komen van Skool's eigen dataroutes; de overlay mount in een Shadow-DOM-root op de actieve tab.
+- Een kleine, datagedreven mapping-laag (`src/skool/mapping.json`) isoleert Skool's response-vormen,
+  zodat een veldnaamwijziging een fix in één bestand blijft.
 
 ## License
 
-[GPL-3.0](LICENSE) © 2026 rocleemusic
+[GPL-3.0](LICENSE) — origineel © 2026 rocleemusic, deze fork zonder aparte auteursclaim.
