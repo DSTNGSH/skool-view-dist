@@ -54,6 +54,7 @@ import { BASE } from './routes.js';
  * @property {number} comments
  * @property {boolean} pinned
  * @property {string} created
+ * @property {string} updated Last-activity timestamp (edit or new comment) — Skool's `updatedAt`.
  * @property {string | null} labelId
  * @property {Author} author
  * @property {Attachment[]} [attachments]
@@ -232,6 +233,7 @@ export function mapPost(raw) {
     comments: asInt(getPath(raw, spec.comments)),
     pinned: Boolean(getPath(raw, spec.pinned)),
     created: String(getPath(raw, spec.created) ?? ''),
+    updated: String(getPath(raw, spec.updated) ?? ''),
     labelId: /** @type {string | null} */ (getPath(raw, spec.labelId) ?? null),
     author: mapAuthor(spec.author, raw),
     // Next.js routes camelCase the field (`attachmentsData`); api2 uses snake_case — try both.
@@ -239,6 +241,88 @@ export function mapPost(raw) {
       getPath(raw, 'metadata.attachmentsData') ?? getPath(raw, 'metadata.attachments_data'),
     ),
   };
+}
+
+/**
+ * Extract a member's group level from a `GET /users/{id}/preview?g=` response. Skool packs the
+ * per-group stats into `user.metadata.sp_data` — a STRINGIFIED JSON like
+ * `{"pts":12705,"lv":8,"pcl":8015,"pnl":33015,"role":2}`, where `lv` is the level. Keyed by the
+ * stable `user.id`. Returns `{ userId, level }` with `level: null` when sp_data is absent/malformed,
+ * or `null` without a user id. (Confirmed live 2026-07-01; see the reverse-engineering notes.)
+ * @param {unknown} raw The parsed preview response.
+ * @returns {{ userId: string, level: number | null } | null}
+ */
+export function mapMemberLevel(raw) {
+  const user = /** @type {any} */ (raw)?.user;
+  const userId = user?.id;
+  if (typeof userId !== 'string' || !userId) return null;
+  let level = /** @type {number | null} */ (null);
+  const sp = user?.metadata?.sp_data;
+  if (typeof sp === 'string') {
+    try {
+      const parsed = JSON.parse(sp);
+      if (typeof parsed?.lv === 'number') level = parsed.lv;
+    } catch {
+      /* malformed sp_data → no level */
+    }
+  }
+  return { userId, level };
+}
+
+/**
+ * @typedef {object} GroupView
+ * @property {string} name The community's display name.
+ * @property {string} iconUrl A validated https Skool-hosted logo URL, or '' to fall back to ▣.
+ */
+
+/**
+ * Map a raw group (`pageProps.currentGroup`) to a topbar view-model. The logo is read from
+ * `metadata.logoUrl` (falling back to `logoBigUrl`/`faviconUrl`) and **origin-validated** (F6-S1):
+ * only an https URL on a skool.com host is kept, so a crafted community can't turn the topbar icon
+ * into an off-origin tracking pixel — an unknown/invalid host degrades to '' (the ▣ mark).
+ * @param {unknown} raw The `currentGroup` object from a feed page.
+ * @returns {GroupView}
+ */
+export function mapGroup(raw) {
+  const group = /** @type {any} */ (raw) ?? {};
+  const meta = group.metadata ?? {};
+  const candidate = String(meta.logoUrl ?? meta.logoBigUrl ?? meta.faviconUrl ?? '');
+  return {
+    name: String(group.name ?? group.displayName ?? meta.displayName ?? ''),
+    iconUrl: safeAssetUrl(candidate),
+  };
+}
+
+/**
+ * Keep a URL only if it is https on a skool.com host (incl. Skool's `assets.skool.com` CDN); else ''.
+ * @param {string} url
+ * @returns {string}
+ */
+function safeAssetUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && /(^|\.)skool\.com$/i.test(u.hostname) ? u.href : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Resolve a Skool relative link (`link_as`) against the site origin, returning an absolute URL ONLY
+ * if it stays on a skool.com host — else ''. Prevents a crafted notification link
+ * (`"@evil.com/"` → `https://www.skool.com@evil.com/`) becoming an off-origin open-redirect (F9-S4).
+ * @param {string} linkAs
+ * @returns {string}
+ */
+function safeSkoolHref(linkAs) {
+  if (!linkAs) return '';
+  try {
+    const u = new URL(linkAs, BASE);
+    return /(^|\.)skool\.com$/i.test(u.hostname) ? u.href : '';
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -338,7 +422,7 @@ export function mapNotification(raw) {
     actorAvatar: String(pick(data, spec.data.actorAvatar) ?? ''),
     text: String(pick(data, spec.data.text) ?? ''),
     preview: String(pick(data, spec.data.preview) ?? ''),
-    href: linkAs ? `${BASE}${linkAs}` : '',
+    href: safeSkoolHref(linkAs),
     rootPostId,
     // For a comment/reply/mention (and like-comment) post_id is the COMMENT and differs from the
     // root; for a new-post / like-post it equals the root, so there's no specific comment to jump to.

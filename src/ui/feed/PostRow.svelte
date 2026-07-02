@@ -4,7 +4,7 @@
   // (client-side only — see skool/pins.js) without opening the post. Natively-pinned posts show
   // the pin lit + disabled: Skool pins are read-only, we never unpin them.
   import Avatar from '../Avatar.svelte';
-  import { shortDate, compactCount } from '../lib/format.js';
+  import { relativeTime, compactCount } from '../lib/format.js';
 
   /**
    * @typedef {object} Props
@@ -15,9 +15,16 @@
    * @property {boolean} nativePinned Pinned by Skool (read-only — toggle disabled).
    * @property {(id: string) => void} onSelect
    * @property {(id: string) => void} onTogglePin
+   * @property {number} [level] Author's member level (F2 badge), if known.
+   * @property {(userId: string) => void} [onNeedLevel] Request this author's level on demand.
    */
   /** @type {Props} */
-  let { post, categoryName, selected, pinned, nativePinned, onSelect, onTogglePin } = $props();
+  let { post, categoryName, selected, pinned, nativePinned, onSelect, onTogglePin, level, onNeedLevel } = $props();
+
+  // F2 — ask App to fetch this author's level once (cached upstream); the badge fills in reactively.
+  $effect(() => {
+    if (post.author.id) onNeedLevel?.(post.author.id);
+  });
 
   /** True when an event originated on the pin button (so the row ignores it). */
   const fromPin = (/** @type {Event} */ e) =>
@@ -65,11 +72,14 @@
     {#if categoryName}
       <div class="rcat"><span class="catchip">{categoryName}</span></div>
     {/if}
+    {#if post.contentText}
+      <div class="rprev">{post.contentText}</div>
+    {/if}
     <div class="rmeta">
-      <Avatar src={post.author.avatar} size="xs" />
+      <Avatar src={post.author.avatar} size="sm" {level} />
       <span class="rname">{post.author.name}</span>
       <span class="rstat"
-        >· {shortDate(post.created)} · ▲{compactCount(post.upvotes)} · 💬{compactCount(
+        >· {relativeTime(post.created)} · ▲{compactCount(post.upvotes)} · 💬{compactCount(
           post.comments,
         )}</span
       >

@@ -12,9 +12,18 @@ import {
   commentsUrl,
   searchUsersUrl,
   notificationsUrl,
+  memberPreviewUrl,
 } from './routes.js';
 import { parseCategories } from './categories.js';
-import { mapPost, mapComment, mapMember, mapMentionUser, mapNotification, getPath } from './map.js';
+import {
+  mapPost,
+  mapComment,
+  mapMember,
+  mapMentionUser,
+  mapNotification,
+  mapMemberLevel,
+  getPath,
+} from './map.js';
 
 // CloudFront 403s requests without a real User-Agent (the reverse-engineering notes). In a browser extension the
 // browser sets this itself and the header is forbidden to override; in Node we must supply it.
@@ -392,4 +401,34 @@ export async function getNotifications({ wafToken, cursor, limit = 30, type = 'a
     hasMore: Boolean(json.has_more),
     cursor: typeof json.cursor === 'string' ? json.cursor : '',
   };
+}
+
+/**
+ * Fetch ONE member's group-level via the api2 preview endpoint (F2 on-demand badges). WAF-gated
+ * (browser-only, same constraints as {@link getComments}). Confirmed live (2026-07-01, HAR):
+ * `GET /users/{userId}/preview?g={groupId}` → the level is packed in `user.metadata.sp_data.lv`
+ * (mapped by {@link mapMemberLevel}). Returns `{ userId, level }` (level may be null), or `null`.
+ * @param {object} args
+ * @param {string} args.userId The member's user uuid.
+ * @param {string} args.groupId The community group's uuid.
+ * @param {string} args.wafToken The AWS-WAF token for the `x-aws-waf-token` header.
+ * @param {FetchLike} [args.fetchFn]
+ * @returns {Promise<{ userId: string, level: number | null } | null>}
+ */
+export async function getMemberPreview({ userId, groupId, wafToken, fetchFn }) {
+  const fn = resolveFetch(fetchFn);
+  const url = memberPreviewUrl(userId, groupId);
+  const res = await fn(url, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'content-type': 'application/json',
+      'x-aws-waf-token': wafToken ?? '',
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`read: ${res.status} ${res.statusText ?? ''} for ${url}`.trim());
+  }
+  return mapMemberLevel(await res.json());
 }

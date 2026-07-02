@@ -40,6 +40,8 @@
    * @property {typeof vote} [voteFn] Injectable like write.
    * @property {typeof createComment} [createCommentFn] Injectable reply write.
    * @property {typeof getWafToken} [tokenFn] Injectable WAF-token getter.
+   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
+   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
    */
   /** @type {Props} */
   let {
@@ -56,7 +58,14 @@
     tokenFn = getWafToken,
     mentionHref,
     registerMention,
+    levelFor,
+    requestLevel,
   } = $props();
+
+  // F2 — request this comment author's level on demand (cached upstream); the badge fills in reactively.
+  $effect(() => {
+    if (comment.author.id) requestLevel?.(comment.author.id);
+  });
 
   /** @type {{ serialize: () => string, reset: () => void } | undefined} */
   let replyBox = $state();
@@ -183,7 +192,7 @@
 </script>
 
 <div class="comment" class:reply={isReply} data-cid={comment.id}>
-  <Avatar src={comment.author.avatar} size="sm" />
+  <Avatar src={comment.author.avatar} size="sm" level={levelFor?.(comment.author.id)} />
   <div class="cbody">
     <div class="crow">
       <span class="who">{comment.author.name}</span>

@@ -7,6 +7,7 @@
 // crawl/sort logic it feeds is covered headlessly by unit tests in the source repo.
 
 import browser from 'webextension-polyfill';
+import { toIdArray } from '../../skool/pins.js';
 
 /** @typedef {import('../../skool/map.js').PostView} PostView */
 
@@ -57,7 +58,7 @@ export async function loadPinnedIds(slug) {
     const key = pinsKey(slug);
     const got = await browser.storage.local.get(key);
     const ids = /** @type {unknown} */ (got?.[key]);
-    return Array.isArray(ids) ? ids.filter((x) => typeof x === 'string') : [];
+    return toIdArray(ids); // tolerant: also recovers an object-shaped legacy value from before the fix
   } catch {
     return [];
   }
@@ -71,7 +72,9 @@ export async function loadPinnedIds(slug) {
  */
 export async function savePinnedIds(slug, ids) {
   try {
-    await browser.storage.local.set({ [pinsKey(slug)]: ids });
+    // toIdArray coerces a Svelte reactive Proxy(Array) to a plain array; Chrome otherwise serialises
+    // the proxy as an object and the load-side check drops every pin (see pins.toIdArray).
+    await browser.storage.local.set({ [pinsKey(slug)]: toIdArray(ids) });
   } catch {
     // best-effort — a failed write just means a pin won't survive a reload.
   }

@@ -41,6 +41,31 @@ export function commentTime(iso) {
 }
 
 /**
+ * Format an ISO timestamp as a compact relative age ("2h", "3d") for recent posts, falling back to
+ * an absolute short date ("Jun 25") once the post is older than `absoluteAfterDays`. Recent activity
+ * reads as "how long ago"; older posts read as a real date. Unparseable/empty/future input falls
+ * back to {@link shortDate} (which returns '' for empty). `now` is injected for deterministic tests.
+ * @param {string | null | undefined} iso
+ * @param {number} [now] Epoch ms "now" (default Date.now()).
+ * @param {{ absoluteAfterDays?: number }} [opts]
+ * @returns {string}
+ */
+export function relativeTime(iso, now = Date.now(), { absoluteAfterDays = 5 } = {}) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return shortDate(iso);
+  const diffMs = now - then;
+  const DAY = 86_400_000;
+  if (diffMs < 0 || diffMs >= absoluteAfterDays * DAY) return shortDate(iso);
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+/**
  * Format an integer count compactly (1200 -> "1.2k", 3_400_000 -> "3.4m"). Likes/comments on
  * popular communities run into the thousands, which would blow out the fixed-width row meta line.
  * @param {number | null | undefined} value

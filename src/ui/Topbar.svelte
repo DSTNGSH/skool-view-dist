@@ -11,6 +11,7 @@
   /**
    * @typedef {object} Props
    * @property {string} groupName Community display name for the brand area.
+   * @property {string} [groupIcon] Community logo URL (F6); shown instead of the ▣ mark when set.
    * @property {import('./theme.js').ThemeId} theme
    * @property {(theme: import('./theme.js').ThemeId) => void} onThemeChange
    * @property {() => void} onExit Toggles the overlay off (content-script toggle).
@@ -22,10 +23,13 @@
    * @property {() => void} [onOpenNotifications] Called when the bell opens (trigger a fetch).
    * @property {() => void} [onLoadMoreNotifications] Append the next page of notifications.
    * @property {(n: NotificationView) => void} [onOpenNotification] Open a notification's target post.
+   * @property {(n: NotificationView) => void} [onToggleNotifRead] Toggle one notification's read state.
+   * @property {() => void} [onMarkAllNotifsRead] Mark every notification read.
    */
   /** @type {Props} */
   let {
     groupName,
+    groupIcon = '',
     theme,
     onThemeChange,
     onExit,
@@ -37,13 +41,29 @@
     onOpenNotifications,
     onLoadMoreNotifications,
     onOpenNotification,
+    onToggleNotifRead,
+    onMarkAllNotifsRead,
   } = $props();
 
   let notifOpen = $state(false);
+  /** @type {HTMLElement | undefined} */
+  let notifWrapEl = $state();
   function toggleNotif() {
     notifOpen = !notifOpen;
     if (notifOpen) onOpenNotifications?.();
   }
+
+  // Close the panel on a click anywhere outside the bell/panel. composedPath() pierces the shadow
+  // DOM so this works inside the overlay's shadow root; the listener is only bound while open.
+  $effect(() => {
+    if (!notifOpen) return;
+    /** @param {Event} e */
+    const onDocClick = (e) => {
+      if (notifWrapEl && !e.composedPath().includes(notifWrapEl)) notifOpen = false;
+    };
+    window.addEventListener('click', onDocClick, true);
+    return () => window.removeEventListener('click', onDocClick, true);
+  });
 </script>
 
 <header class="topbar">
@@ -59,7 +79,10 @@
         <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
       </svg>
     </button>
-    <div class="brand"><span class="brand-mark">▣</span> <span>{groupName}</span></div>
+    <div class="brand">
+      {#if groupIcon}<img class="group-icon" src={groupIcon} alt="" />{:else}<span class="brand-mark">▣</span>{/if}
+      <span>{groupName}</span>
+    </div>
   </div>
 
   <nav class="tabs" aria-label="Views">
@@ -82,7 +105,7 @@
       </svg>
     </button>
 
-    <div class="notif-wrap">
+    <div class="notif-wrap" bind:this={notifWrapEl}>
       <button
         class="iconbtn"
         type="button"
@@ -98,7 +121,7 @@
           />
         </svg>
         {#if unreadCount > 0}
-          <span class="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+          <span class="notif-badge">{unreadCount}</span>
         {/if}
       </button>
       {#if notifOpen}
@@ -111,6 +134,8 @@
             notifOpen = false;
             onOpenNotification?.(n);
           }}
+          onToggleRead={onToggleNotifRead}
+          onMarkAll={onMarkAllNotifsRead}
           onClose={() => (notifOpen = false)}
         />
       {/if}

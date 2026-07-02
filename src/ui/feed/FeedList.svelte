@@ -18,13 +18,18 @@
    * @property {Array<{ id: string, name: string }>} categories
    * @property {string | null} selectedId
    * @property {(id: string) => void} onSelect
+   * @property {number} [width] List pane width in px (F4 resize).
+   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
+   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
    */
   /** @type {Props} */
-  let { store, categories, selectedId, onSelect } = $props();
+  let { store, categories, selectedId, onSelect, width, levelFor, requestLevel } = $props();
 
   const INITIAL_WINDOW = 30;
   const WINDOW_STEP = 30;
   let windowSize = $state(INITIAL_WINDOW);
+  // F12 — the Pinned section starts collapsed each time the overlay opens.
+  let pinnedCollapsed = $state(true);
 
   /** @type {HTMLElement | undefined} */
   let paneEl = $state();
@@ -93,7 +98,7 @@
   });
 </script>
 
-<aside class="listpane" bind:this={paneEl}>
+<aside class="listpane" bind:this={paneEl} style={width ? `width: ${width}px` : undefined}>
   <div class="listhead">
     <span class="sub">
       {#if store.isCrawling && total > 0}
@@ -124,21 +129,32 @@
       <div class="empty">No posts in this category yet.</div>
     {:else}
       {#if pinned.length}
-        <div class="listdiv">📌 Pinned</div>
-        {#each pinned as post (post.id)}
-          <PostRow
-            {post}
-            categoryName={nameFor(post)}
-            selected={selectedId === post.id}
-            pinned={store.isPinned(post)}
-            nativePinned={post.pinned}
-            {onSelect}
-            onTogglePin={(id) => store.togglePin(id, post.pinned)}
-          />
-        {/each}
-        {#if visibleUnpinned.length}
-          <div class="listdiv">All posts</div>
+        <div class="pinned-header">
+          <button
+            class="pinned-toggle"
+            type="button"
+            aria-expanded={!pinnedCollapsed}
+            onclick={() => (pinnedCollapsed = !pinnedCollapsed)}
+          >
+            <span class="pinned-chevron" class:collapsed={pinnedCollapsed}>▼</span> 📌 Pinned ({pinned.length})
+          </button>
+        </div>
+        {#if !pinnedCollapsed}
+          {#each pinned as post (post.id)}
+            <PostRow
+              {post}
+              categoryName={nameFor(post)}
+              selected={selectedId === post.id}
+              pinned={store.isPinned(post)}
+              nativePinned={post.pinned}
+              level={levelFor?.(post.author.id)}
+              onNeedLevel={requestLevel}
+              {onSelect}
+              onTogglePin={(id) => store.togglePin(id, post.pinned)}
+            />
+          {/each}
         {/if}
+        <div class="pinned-divider"></div>
       {/if}
       {#each visibleUnpinned as post (post.id)}
         <PostRow
@@ -147,6 +163,8 @@
           selected={selectedId === post.id}
           pinned={store.isPinned(post)}
           nativePinned={post.pinned}
+          level={levelFor?.(post.author.id)}
+          onNeedLevel={requestLevel}
           {onSelect}
           onTogglePin={(id) => store.togglePin(id, post.pinned)}
         />

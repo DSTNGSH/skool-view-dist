@@ -32,6 +32,8 @@
    * @property {boolean} [pinned] Shows as pinned (native OR local).
    * @property {boolean} [nativePinned] Pinned by Skool (read-only — toggle disabled).
    * @property {(id: string) => void} [onTogglePin] Toggle this post's local pin.
+   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
+   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
    */
   /** @type {Props} */
   let {
@@ -46,16 +48,23 @@
     pinned = false,
     nativePinned = false,
     onTogglePin,
+    levelFor,
+    requestLevel,
   } = $props();
+
+  // F2 — request the open post's author level on demand (cached upstream).
+  $effect(() => {
+    if (post?.author?.id) requestLevel?.(post.author.id);
+  });
 </script>
 
 <main class="detail">
   {#if !post}
     <div class="placeholder">Select a post to open it here →</div>
   {:else}
-    <article class="dwrap">
+    <article class="dwrap detailcard">
       <div class="pmeta">
-        <Avatar src={post.author.avatar} size="md" />
+        <Avatar src={post.author.avatar} size="md" level={levelFor?.(post.author.id)} />
         <div>
           <div class="who">{post.author.name}</div>
           <div class="when">{shortDate(post.created)}</div>
@@ -90,6 +99,8 @@
         {registerMention}
         {refreshNonce}
         {highlightCommentId}
+        {levelFor}
+        {requestLevel}
       />
     </article>
   {/if}

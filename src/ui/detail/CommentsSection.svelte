@@ -35,6 +35,8 @@
    * @property {(id: string, handle: string) => void} [registerMention] Record a user id->handle.
    * @property {number} [refreshNonce] Bumped by a manual refresh to force a comments re-fetch.
    * @property {string} [highlightCommentId] A comment to scroll to + highlight (from a notification).
+   * @property {(userId: string) => (number | undefined)} [levelFor] Resolve a member level (F2).
+   * @property {(userId: string) => void} [requestLevel] Request a member level on demand (F2).
    */
   /** @type {Props} */
   let {
@@ -49,6 +51,8 @@
     registerMention,
     refreshNonce = 0,
     highlightCommentId = '',
+    levelFor,
+    requestLevel,
   } = $props();
 
   /** @type {HTMLDivElement | undefined} */
@@ -346,7 +350,7 @@
       <div class="cempty">No comments yet — be the first to comment.</div>
     {:else if sort === 'time'}
       {#each flatByTime as comment (comment.id)}
-        <Comment {comment} {postId} {groupId} {currentUser} {tokenFn} {mentionHref} {registerMention} createCommentFn={createCommentFn} />
+        <Comment {comment} {postId} {groupId} {currentUser} {tokenFn} {mentionHref} {registerMention} {levelFor} {requestLevel} createCommentFn={createCommentFn} />
       {/each}
     {:else}
       {#each comments as comment (comment.id)}
@@ -359,6 +363,8 @@
           {tokenFn}
           {mentionHref}
           {registerMention}
+          {levelFor}
+          {requestLevel}
           createCommentFn={createCommentFn}
           onReply={(reply) => appendReply(comment.id, reply)}
         />
@@ -376,6 +382,8 @@
                 {tokenFn}
                 {mentionHref}
                 {registerMention}
+                {levelFor}
+                {requestLevel}
                 createCommentFn={createCommentFn}
                 onReply={(r) => appendReply(comment.id, r)}
               />

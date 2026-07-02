@@ -9,7 +9,7 @@
 // A 403 means a stale/missing WAF token — the caller should clear the cached token (see
 // ui/waf.clearWafToken) and prompt the user to reload Skool.
 
-import { voteUrl, createPostUrl } from './routes.js';
+import { voteUrl, createPostUrl, markNotificationUrl } from './routes.js';
 import { mapComment } from './map.js';
 
 /**
@@ -120,6 +120,23 @@ export async function vote({ postId, like, wafToken, fetch }) {
   const fn = resolveFetch(fetch);
   const body = like ? { old: '', new: 'up' } : { old: 'up', new: '' };
   await sendJson(fn, voteUrl(postId), 'PUT', body, wafToken);
+}
+
+/**
+ * Mark a notification read or unread. `POST /messages/{id}/{read|unread}` with body
+ * `{ created_at }` — Skool requires the notification's OWN timestamp (its `ts`), confirmed live
+ * 2026-07-01; a 200 empty body is success. Powers F9's per-item toggle and mark-all.
+ * @param {object} args
+ * @param {string} args.id The notification's message uuid.
+ * @param {string} args.createdAt The notification's ISO timestamp (its `ts`/`created_at`).
+ * @param {boolean} args.read True → mark read; false → mark unread.
+ * @param {string} args.wafToken AWS-WAF token for the `x-aws-waf-token` header.
+ * @param {FetchLike} [args.fetch] Injected fetch (default globalThis.fetch).
+ * @returns {Promise<void>}
+ */
+export async function markNotification({ id, createdAt, read, wafToken, fetch }) {
+  const fn = resolveFetch(fetch);
+  await sendJson(fn, markNotificationUrl(id, read), 'POST', { created_at: createdAt }, wafToken);
 }
 
 /**

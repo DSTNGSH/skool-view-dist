@@ -4,6 +4,16 @@ import App from '../ui/App.svelte';
 // Overlay CSS imported as a raw string so we can inject it into the shadow root.
 // A head-injected <style> tag would NOT cross the shadow boundary.
 import overlayCss from '../ui/overlay.css?inline';
+import { installCapture } from '../skool/capture.js';
+
+// TEMP — capture build only (`npm run build:capture`, MODE === 'capture'); the guarded call is
+// tree-shaken out of normal firefox/chrome builds. Logs Skool API calls to the PAGE console,
+// dumping FULL JSON for the endpoints we still need to confirm: /users/{id}/preview (F2 level) and
+// /messages/{id} (F9 mark-read). Remove this block + the import once C1/C2 are captured.
+// @ts-ignore — import.meta.env.MODE is a Vite build-time constant (not typed in jsconfig).
+if (import.meta.env.MODE === 'capture') {
+  installCapture({ verboseFor: /\/(users|messages)\//i });
+}
 
 // Content script. Responsibility: mount/unmount the overlay into an open Shadow DOM,
 // keep the host node alive against Skool's SPA, and obey toggle messages + initial state.
@@ -109,16 +119,32 @@ browser.runtime.onMessage.addListener((/** @type {unknown} */ message) => {
   return undefined;
 });
 
-// On (re)load, restore this tab's state from the background's storage.session.
+// F10 — Escape closes the overlay, but YIELDS to an open lightbox / mention dropdown inside it
+// (those own Escape first). We check the shadow DOM for them rather than racing keydown listeners,
+// so the first Escape closes the inner thing (via its own handler) and the next closes the overlay.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !overlayOn || e.defaultPrevented) return;
+  if (shadowRoot?.querySelector('.lightbox, .mb-list')) return;
+  requestToggleOff();
+});
+
+// F10 — browser back/forward dismisses the overlay so it doesn't strand over a newly-navigated page.
+window.addEventListener('popstate', () => {
+  if (overlayOn) requestToggleOff();
+});
+
+// On (re)load the overlay always starts CLOSED (F10) — even if this tab had it open before the
+// reload. If the background still thinks this tab is on, flip its stored state off so a later
+// toolbar toggle (Alt+Shift+C) opens fresh rather than "closing" an already-hidden overlay.
 async function restoreInitialState() {
+  setOverlay(false);
   try {
     const reply = /** @type {{ on?: boolean }} */ (
       await browser.runtime.sendMessage({ type: 'skool-view:get-overlay' })
     );
-    setOverlay(reply?.on === true);
+    if (reply?.on === true) requestToggleOff();
   } catch {
-    // Background not ready; default to off.
-    setOverlay(false);
+    // Background not ready — already closed.
   }
 }
 

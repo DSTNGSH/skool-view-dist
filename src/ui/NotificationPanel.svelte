@@ -17,10 +17,14 @@
    * @property {boolean} [hasMore]
    * @property {() => void} [onLoadMore]
    * @property {(n: NotificationView) => void} [onOpen] Open the target post in the viewer.
+   * @property {(n: NotificationView) => void} [onToggleRead] Toggle one notification's read state.
+   * @property {() => void} [onMarkAll] Mark every notification read.
    * @property {() => void} [onClose]
    */
   /** @type {Props} */
-  let { items = [], status = 'idle', hasMore = false, onLoadMore, onOpen, onClose } = $props();
+  let { items = [], status = 'idle', hasMore = false, onLoadMore, onOpen, onToggleRead, onMarkAll, onClose } = $props();
+
+  const anyUnread = $derived(items.some((n) => n.unread));
 
   /**
    * A plain left-click opens the target in the viewer; ⌘/Ctrl/Shift/Alt or middle-click fall
@@ -38,7 +42,12 @@
 <div class="notif-panel" role="dialog" aria-label="Notifications">
   <div class="notif-head">
     <span>Notifications</span>
-    <button class="iconbtn notif-close" type="button" aria-label="Close notifications" onclick={onClose}>×</button>
+    <span style="display:flex; gap:10px; align-items:center;">
+      {#if anyUnread}
+        <button class="np-markall" type="button" onclick={onMarkAll}>Mark all as read</button>
+      {/if}
+      <button class="iconbtn notif-close" type="button" aria-label="Close notifications" onclick={onClose}>×</button>
+    </span>
   </div>
   <div class="notif-list">
     {#if status === 'loading' && items.length === 0}
@@ -49,14 +58,23 @@
       <div class="notif-empty">You’re all caught up.</div>
     {:else}
       {#each items as n (n.id)}
-        <a class="notif-item" class:unread={n.unread} href={n.href} onclick={(e) => handleClick(e, n)}>
-          <Avatar src={n.actorAvatar} size="sm" />
-          <div class="notif-body">
-            <div class="notif-text"><strong>{n.actorName}</strong> {n.text}</div>
-            {#if n.preview}<div class="notif-preview">{n.preview}</div>{/if}
-            <div class="notif-time">{commentTime(n.ts)}</div>
-          </div>
-        </a>
+        <div class="notif-item" class:unread={n.unread}>
+          <a class="notif-link" href={n.href} onclick={(e) => handleClick(e, n)}>
+            <Avatar src={n.actorAvatar} size="sm" />
+            <div class="notif-body">
+              <div class="notif-text"><strong>{n.actorName}</strong> {n.text}</div>
+              {#if n.preview}<div class="notif-preview">{n.preview}</div>{/if}
+              <div class="notif-time">{commentTime(n.ts)}</div>
+            </div>
+          </a>
+          <button
+            class="notif-dot"
+            type="button"
+            title={n.unread ? 'Mark as read' : 'Mark as unread'}
+            aria-label={n.unread ? 'Mark as read' : 'Mark as unread'}
+            onclick={() => onToggleRead?.(n)}
+          ></button>
+        </div>
       {/each}
       {#if hasMore}
         <button

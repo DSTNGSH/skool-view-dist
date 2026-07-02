@@ -28,7 +28,8 @@ const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * {@link RATE_LIMIT_BACKOFF_MS} and RETRIES THE SAME PAGE rather than advancing.
  *
  * `seedPosts` pre-fills the dedup map (pass the cached corpus so a re-crawl merges new posts into
- * what's already known). `onProgress` is called after each successful page with a fresh snapshot
+ * what's already known AND refreshes the mutable fields of existing posts — native pin / counts /
+ * title, see R1). `onProgress` is called after each successful page with a fresh snapshot
  * of the accumulated posts, so the UI can render incrementally as the crawl proceeds.
  *
  * @param {object} args
@@ -62,6 +63,10 @@ export async function crawlFeed({
   for (const post of seedPosts) {
     if (post && post.id) byId.set(post.id, post);
   }
+  // Ids seen on THIS crawl's pages (as opposed to the seed). The first sighting this crawl replaces
+  // the seed entirely (R1); later within-crawl duplicates may only KEEP a pin, never clear it.
+  /** @type {Set<string>} */
+  const seenThisCrawl = new Set();
 
   let page = 1;
   let consecutiveErrors = 0;
@@ -90,9 +95,20 @@ export async function crawlFeed({
 
     let added = 0;
     for (const post of result.posts) {
-      if (post && post.id && !byId.has(post.id)) {
+      if (!post || !post.id) continue;
+      if (!seenThisCrawl.has(post.id)) {
+        // First sighting this crawl: the fresh page REPLACES the seed, refreshing mutable server
+        // fields (native `pinned`, counts, title) — so a server-side unpin propagates on refresh (R1).
+        // Map.set on an existing key keeps its insertion order.
+        seenThisCrawl.add(post.id);
+        if (!byId.has(post.id)) added += 1;
         byId.set(post.id, post);
-        added += 1;
+      } else if (post.pinned) {
+        // Skool lists a pinned post TWICE — at the top (pinned:true) AND in its chronological slot
+        // (pinned:false). A within-crawl duplicate must never clobber the pin, so OR the flag on
+        // (whichever order the two occurrences arrive in).
+        const prev = byId.get(post.id);
+        if (prev && !prev.pinned) byId.set(post.id, { ...prev, pinned: true });
       }
     }
     if (onProgress) {

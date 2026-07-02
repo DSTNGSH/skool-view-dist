@@ -42,7 +42,7 @@ export function createFeedStore({ buildId, slug, fetchFn }) {
   /** A labelId, or '' for all categories. @type {string} */
   let category = $state('');
   /** @type {SortMode} */
-  let sort = $state('newest');
+  let sort = $state('activity'); // Skool's native default: most-recently-active first
   /** Posts indexed so far (for the crawl progress meter). */
   let indexed = $state(0);
   /** The user's locally-pinned post ids (additive to native Skool pins). @type {string[]} */
